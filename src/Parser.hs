@@ -164,8 +164,5 @@ classDeclaration =
 program :: Parser Program
 program = spaces >> GProg <$> many1 classDeclaration <* eof
 
-parseString :: String -> Either ParseError Program
-parseString = parse program ""
-
--- parseString :: String -> Except String Program
--- parseString s = ExceptT (Identity $ first show $ parse program "" s)
+parseString :: String -> Except String Program
+parseString s = ExceptT (Identity $ first show $ parse program "" s)

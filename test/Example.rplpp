@@ -1,5 +1,6 @@
 class Foo
     int x
+    int y
 
     method run(int a)
         a += x
