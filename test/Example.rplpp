@@ -1,0 +1,14 @@
+class Foo
+    int x
+
+    method run(int a)
+        a += x
+
+class Program
+    int result
+
+    method main()
+        new Foo foo
+        result += 1
+        call foo::run(result)
+        delete Foo foo
