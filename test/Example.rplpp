@@ -13,3 +13,8 @@ class Program
         result += 1
         call foo::run(result)
         delete Foo foo
+
+        new Foo foo
+        delete Foo foo
+
+        new Foo foo

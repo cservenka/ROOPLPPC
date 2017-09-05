@@ -35,34 +35,34 @@ newtype ScopeAnalyzer a = ScopeAnalyzer { runSA :: StateT SAState (Except String
 initialState :: CAState -> SAState
 initialState s = SAState { symbolIndex = 0, symbolTable = [], scopeStack = [], virtualTables = [], caState = s, mainMethod = 0 }
 
--- Add an empty scope to the scope stack
+-- |Add an empty scope to the scope stack
 enterScope :: ScopeAnalyzer ()
 enterScope = modify $ \s -> s { scopeStack = [] : scopeStack s }
 
--- Leaves the current scope by removing it from the scope stack
+-- |Leaves the current scope by removing it from the scope stack
 leaveScope :: ScopeAnalyzer ()
 leaveScope = modify $ \s -> s { scopeStack = drop 1 $ scopeStack s }
 
--- Returns the top scope at the scope stack
+-- |Returns the top scope at the scope stack
 topScope :: ScopeAnalyzer Scope
 topScope = gets scopeStack >>= \ss ->
     case ss of
         (s:_) -> return s
         [] -> throwError "ICE: Empty scope stack"
 
--- Add a symbol to the current scope
+-- |Add a symbol to the current scope
 addToScope :: (Identifier, SIdentifier) -> ScopeAnalyzer ()
 addToScope b =
     do ts <- topScope
        modify $ \s -> s { scopeStack = (b : ts) : drop 1 (scopeStack s) }
 
--- Remove a symbol from the current scope
+-- |Remove a symbol from the current scope
 removeFromScope :: (Identifier, SIdentifier) -> ScopeAnalyzer ()
 removeFromScope (identifier, symbolIndex) =
     do ts <- topScope
        modify $ \s -> s { scopeStack = filter (\(n, _) -> n /= identifier) ts : drop 1 (scopeStack s) }
 
--- Inserts an identifier, symbol pair into the symbol table and current scope
+-- |Inserts an identifier, symbol pair into the symbol table and current scope
 saInsert :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
 saInsert sym n =
     do ts <- topScope
@@ -72,7 +72,7 @@ saInsert sym n =
        addToScope (n, i)
        return i
 
--- Removed an identifier, symbol pair from the symbol table and current scope
+-- |Removed an identifier, symbol pair from the symbol table and current scope
 saRemove :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
 saRemove sym n =
     do ts <- topScope
@@ -82,14 +82,14 @@ saRemove sym n =
        removeFromScope (n, i)
        return i
 
--- Looks up an identifier in the current scope
+-- |Looks up an identifier in the current scope
 saLookup :: Identifier -> ScopeAnalyzer SIdentifier
 saLookup n = gets scopeStack >>= \ss ->
     case listToMaybe $ mapMaybe (lookup n) ss of
         Nothing -> throwError $ "Undeclared symbol: " ++ n
         Just i -> return i
 
--- Analyses Expressions
+-- |Scope Analyses Expressions
 saExpression :: Expression -> ScopeAnalyzer SExpression
 saExpression (Constant v) = pure $ Constant v
 saExpression (Variable n) = Variable <$> saLookup n
@@ -99,7 +99,7 @@ saExpression (Binary binop e1 e2) =
     <$> saExpression e1
     <*> saExpression e2
 
--- Analyses Statements
+-- |Scope Analyses Statements
 saStatement :: Statement -> ScopeAnalyzer SStatement
 saStatement s =
     case s of
@@ -152,7 +152,7 @@ saStatement s =
 setMainMethod :: SIdentifier -> ScopeAnalyzer ()
 setMainMethod i = modify $ \s -> s { mainMethod = i }
 
--- Analyses Methods
+-- |Scope Analyses Methods
 saMethod :: (TypeName, MethodDeclaration) -> ScopeAnalyzer (TypeName, SMethodDeclaration)
 saMethod (t, GMDecl m ps body) =
     do m' <- saLookup m
@@ -195,12 +195,13 @@ saClass offset pids (GCDecl c fs ms) =
           insertMethod (GMDecl n ps _) = saInsert (Method (map getType ps) n) n >>= getMethodName
           getType (GDecl tp _) = tp
 
--- Analyses Programs
+-- |Analyses Programs
 saProgram :: Program -> ScopeAnalyzer SProgram
 saProgram (GProg cs) = concat <$> mapM (saClass 1 []) cs
 
 scopeAnalysis :: (Program, CAState) -> Except String (SProgram, SAState)
 scopeAnalysis (p, s) = runStateT (runSA $ saProgram p) $ initialState s
 
+-- |Pretty prints the current Scope Analysis State Monad
 printSAState :: (SProgram, SAState) -> IO ()
 printSAState (_, s) = pPrint s
