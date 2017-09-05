@@ -12,6 +12,8 @@ import Data.List
 import Control.Monad.State
 import Control.Monad.Except
 
+import Debug.Trace (trace, traceShow)
+
 import Text.Pretty.Simple (pPrint)
 
 import AST
@@ -56,9 +58,9 @@ addToScope b =
 
 -- Remove a symbol from the current scope
 removeFromScope :: (Identifier, SIdentifier) -> ScopeAnalyzer ()
-removeFromScope b =
+removeFromScope (identifier, symbolIndex) =
     do ts <- topScope
-       modify $ \s -> s { scopeStack = filter (not . (==) b) ts : drop 1 (scopeStack s) }
+       modify $ \s -> s { scopeStack = filter (\(n, _) -> n /= identifier) ts : drop 1 (scopeStack s) }
 
 -- Inserts an identifier, symbol pair into the symbol table and current scope
 saInsert :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
@@ -76,7 +78,7 @@ saRemove sym n =
     do ts <- topScope
        when (isNothing $ lookup n ts) (throwError $ "Removal of unsued symbol: " ++ n)
        i <- gets symbolIndex
-       modify $ \s -> s { symbolTable = filter (not . (==) (i, sym)) (symbolTable s), symbolIndex = i - 1 }
+       modify $ \s -> s { symbolTable = filter (\(_, symbol) -> symbol /= sym) (symbolTable s), symbolIndex =  toInteger $ length (symbolTable s) - 1 }
        removeFromScope (n, i)
        return i
 
