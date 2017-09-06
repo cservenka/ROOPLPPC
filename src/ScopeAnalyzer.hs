@@ -62,27 +62,26 @@ removeFromScope (identifier, symbolIndex) =
     do ts <- topScope
        modify $ \s -> s { scopeStack = filter (\(n, _) -> n /= identifier) ts : drop 1 (scopeStack s) }
 
--- |Inserts an identifier, symbol pair into the symbol table and current scope
+-- |Inserts an identifier and symbol pair into the symbol table and current scope
 saInsert :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
 saInsert sym n =
     do ts <- topScope
        when (isJust $ lookup n ts) (throwError $ "Redeclaration of symbol: " ++ n)
        i <- gets symbolIndex
        modify $ \s -> s { symbolTable = (i, sym) : symbolTable s, symbolIndex = 1 + i }
-       addToScope (n, i)
+       traceShow (i, sym) addToScope (n, i)
        return i
 
--- |Removed an identifier, symbol pair from the symbol table and current scope
+-- |Removed an identifier and symbol pair from the current scope
 saRemove :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
 saRemove sym n =
     do ts <- topScope
+       i <- saLookup n
        when (isNothing $ lookup n ts) (throwError $ "Removal of unsued symbol: " ++ n)
-       i <- gets symbolIndex
-       modify $ \s -> s { symbolTable = filter (\(_, symbol) -> symbol /= sym) (symbolTable s), symbolIndex =  toInteger $ length (symbolTable s) - 1 }
        removeFromScope (n, i)
        return i
 
--- |Looks up an identifier in the current scope
+-- |Looks up an identifier in the scope
 saLookup :: Identifier -> ScopeAnalyzer SIdentifier
 saLookup n = gets scopeStack >>= \ss ->
     case listToMaybe $ mapMaybe (lookup n) ss of
@@ -125,13 +124,20 @@ saStatement s =
             <*> mapM saLookup args
 
         (ObjectConstruction tp n) ->
-            do n' <- saInsert (LocalVariable (ObjectType tp) n) n
+            do enterScope
+               n' <- saInsert (LocalVariable (ObjectType tp) n) n
                return $ ObjectConstruction tp n'
 
         (ObjectDestruction tp n) ->
             do n' <- saRemove (LocalVariable (ObjectType tp) n) n
                return $ ObjectDestruction tp n'
 
+        (ObjectBlock tp n stmt) ->
+                    do enterScope
+                       n' <- saInsert (LocalVariable (ObjectType tp) n) n
+                       stmt' <- mapM saStatement stmt
+                       leaveScope
+                       return $ ObjectBlock tp n' stmt'
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
           var _ = []
@@ -149,6 +155,7 @@ saStatement s =
                when (any isCF $ mapMaybe (rlookup st) args') (throwError $ "Irreversible invocation of method " ++ m)
                return args'
 
+-- |Set the main method in the Scope Analyzer state
 setMainMethod :: SIdentifier -> ScopeAnalyzer ()
 setMainMethod i = modify $ \s -> s { mainMethod = i }
 
@@ -164,18 +171,21 @@ saMethod (t, GMDecl m ps body) =
        return (t, GMDecl m' ps' body')
     where insertMethodParameter (GDecl tp n) = GDecl tp <$> saInsert (MethodParameter tp n) n
 
+-- |Returns method name at given index
 getMethodName :: SIdentifier -> ScopeAnalyzer (SIdentifier, MethodName)
 getMethodName i = gets symbolTable >>= \st ->
     case lookup i st of
         (Just (Method _ m)) -> return (i, m)
         _ -> throwError $ "ICE: Invalid method index " ++ show i
 
+-- |Prefixes the Vtable
 prefixVtable :: [(SIdentifier, MethodName)] -> (SIdentifier, MethodName) -> [(SIdentifier, MethodName)]
 prefixVtable [] m' = [m']
 prefixVtable (m:ms) m' = if comp m m' then m':ms else m : prefixVtable ms m'
     where comp (_, n) (_, n') = n == n'
 
 -- TODO: Inheritance
+-- |Scope Analyses a passed class
 saClass :: Offset -> [SIdentifier] -> ClassDeclaration -> ScopeAnalyzer [(TypeName, SMethodDeclaration)]
 saClass offset pids (GCDecl c fs ms) =
     do enterScope
@@ -203,5 +213,5 @@ scopeAnalysis :: (Program, CAState) -> Except String (SProgram, SAState)
 scopeAnalysis (p, s) = runStateT (runSA $ saProgram p) $ initialState s
 
 -- |Pretty prints the current Scope Analysis State Monad
-printSAState :: (SProgram, SAState) -> IO ()
+-- printSAState :: (_, SAState) -> IO ()
 printSAState (_, s) = pPrint s

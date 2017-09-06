@@ -21,7 +21,9 @@ keywords =
      "uncall",
      "int",
      "new",
-     "delete"]
+     "delete",
+     "construct",
+     "destruct"]
 
 --Operator precedence identical to C
 operatorTable :: [[(String, BinOp)]]
@@ -128,12 +130,23 @@ objectDestruction =
     <$> typeName
     <*> identifier
 
+objectBlock :: Parser Statement
+objectBlock =
+    reserved "construct"
+    >> ObjectBlock
+    <$> typeName
+    <*> identifier
+    <*> block
+    <* reserved "destruct"
+    <* identifier
+
 statement :: Parser Statement
 statement = try assign
         <|> objectCall
         <|> objectUncall
         <|> objectConstruction
         <|> objectDestruction
+        <|> objectBlock
 
 block :: Parser [Statement]
 block = many1 statement

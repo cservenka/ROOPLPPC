@@ -44,19 +44,12 @@ data GExpr v
 
 --Statements
 data GStmt m v
-  = Assign v
-           ModOp
-           (GExpr v)
-  | ObjectCall v
-               MethodName
-               [v]
-  | ObjectUncall v
-                 MethodName
-                 [v]
-  | ObjectConstruction TypeName
-                       v
-  | ObjectDestruction TypeName
-                      v
+  = Assign v ModOp (GExpr v)
+  | ObjectCall v MethodName [v]
+  | ObjectUncall v MethodName [v]
+  | ObjectConstruction TypeName v
+  | ObjectDestruction TypeName v
+  | ObjectBlock TypeName v [GStmt m v]
   deriving (Show, Eq)
 
 --Field/Parameter declarations
