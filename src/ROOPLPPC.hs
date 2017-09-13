@@ -19,7 +19,8 @@ main =
 --        either (hPutStrLn stderr) printCAState (compileProgram input)
 --        either (hPutStrLn stderr) printSAState (compileProgram input)
 --        either (hPutStrLn stderr) showPISAProgram (compileProgram input)
-       either (hPutStrLn stderr) (putStr . showProgram) (compileProgram input)
+--        either (hPutStrLn stderr) (putStr . showProgram) (compileProgram input)
+       either (hPutStrLn stderr) (writeProgram) (compileProgram input)
 
 -- compileProgram :: String -> Either Error (AST.Program, CAState)
 -- compileProgram :: String -> Either String (SProgram, SAState)

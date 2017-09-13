@@ -60,8 +60,9 @@ data Macro = Immediate Integer
            | SizeMacro TypeName
            | OffsetMacro TypeName MethodName
            | ProgramSize
-           | FreeListPointersSize
+           | FreeListsSize
            | StackOffset
+           | InitialMemoryBlockSize
     deriving (Show, Eq)
 
 type MInstruction = GInstr Macro
@@ -139,5 +140,5 @@ showProgram (GProg p) = ";; pendulum pal file\n" ++ intercalate "\n" (map showLi
           spaces :: (Int -> String)
           spaces n = [1..n] >> " "
 
-writeProgram :: String -> Program -> IO ()
-writeProgram file p = writeFile file $ showProgram p
+writeProgram :: Program -> IO ()
+writeProgram p = writeFile "../test/Example.pal" $ showProgram p

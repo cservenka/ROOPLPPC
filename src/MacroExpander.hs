@@ -18,6 +18,7 @@ import ClassAnalyzer
 type Size = Integer
 type Address = Integer
 type Offset = Integer
+type ListSize = Integer
 
 data MEState =
     MEState {
@@ -25,7 +26,9 @@ data MEState =
         sizeTable :: [(TypeName, Size)],
         offsetTable :: [(TypeName, [(MethodName, Offset)])],
         programSize :: Size,
-        stackOffset :: Offset
+        freeListsSize :: Size,
+        stackOffset :: Offset,
+        initialMemoryBlockSize :: Size
     } deriving (Show, Eq)
 
 newtype MacroExpander a = MacroExpander { runME :: ReaderT MEState (Except String) a }
@@ -47,7 +50,10 @@ initialState (GProg p) s =
         sizeTable = (classSize . caState) s,
         offsetTable = getOffsetTable s,
         programSize = genericLength p,
-        stackOffset = 1024}
+        freeListsSize = 40,
+        stackOffset = 2048,
+        initialMemoryBlockSize = 1024
+        }
 
     where toPair (a, (Just l, _)) = Just (l, a)
           toPair _ = Nothing
@@ -82,7 +88,9 @@ meMacro (AddressMacro l) = getAddress l
 meMacro (SizeMacro tn) = getSize tn
 meMacro (OffsetMacro tn mn) = getOffset tn mn
 meMacro ProgramSize = asks programSize
+meMacro FreeListsSize = asks freeListsSize
 meMacro StackOffset = asks stackOffset
+meMacro InitialMemoryBlockSize = asks initialMemoryBlockSize
 
 -- | Macro instructions
 meInstruction :: MInstruction -> MacroExpander Instruction

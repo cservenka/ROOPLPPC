@@ -533,7 +533,8 @@ cgOutput tp =
 cgProgram :: SProgram -> CodeGenerator PISA.MProgram
 cgProgram p =
     do vt <- cgVirtualTables
-       rv <- tempRegister
+       rv <- tempRegister -- V table register
+       rb <- tempRegister -- Memory block register
        popTempRegister
        ms <- concat <$> mapM cgMethod p
        l_main <- getMainLabel
@@ -542,6 +543,15 @@ cgProgram p =
        let mvt = "l_" ++ mtp ++ "_vt"
            mn = [(Just "start", BRA "top"),
                  (Nothing, START),
+                 (Nothing, ADDI registerFLPs ProgramSize),    -- Init free list pointer list
+                 (Nothing, XOR registerHP registerFLPs),      -- Init heap pointer
+                 (Nothing, ADDI registerHP FreeListsSize),    -- Init space for FLPs list
+                 (Nothing, XOR rb registerHP),                -- Store address of initial memory block in rb
+                 (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
+                 (Nothing, SUBI registerFLPs $ Immediate 4),  -- Index to last element of free lists
+                 (Nothing, EXCH rb registerFLPs),             -- Store address of first block in last element of free lists
+                 (Nothing, ADDI registerFLPs $ Immediate 4),  -- Index to end of free lists
+                 (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
                  (Nothing, ADDI registerSP StackOffset),      -- Init stack pointer
                  (Nothing, XOR registerThis registerSP),      -- Store address of main object
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Store address of vtable in rv
@@ -558,6 +568,15 @@ cgProgram p =
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Clear rv
                  (Nothing, XOR registerThis registerSP),      -- Clear 'this'
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
+                 (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
+                 (Nothing, SUBI registerFLPs $ Immediate 4),  -- Index to last element of free lists
+                 (Nothing, EXCH rb registerFLPs),             -- Remove address of first block in last element of free lists
+                 (Nothing, ADDI registerFLPs $ Immediate 4),  -- Index to end of free lists
+                 (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
+                 (Nothing, XOR rb registerHP),                -- clear rb
+                 (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
+                 (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
+                 (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists
                  (Just "finish", FINISH)]
        return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ ms ++ mn
 
