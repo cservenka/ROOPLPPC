@@ -58,7 +58,7 @@ addToScope b =
 
 -- |Remove a symbol from the current scope
 removeFromScope :: (Identifier, SIdentifier) -> ScopeAnalyzer ()
-removeFromScope (identifier, symbolIndex) =
+removeFromScope (identifier, _) =
     do ts <- topScope
        modify $ \s -> s { scopeStack = filter (\(n, _) -> n /= identifier) ts : drop 1 (scopeStack s) }
 
@@ -108,7 +108,45 @@ saStatement s =
             <$> saLookup n
             <*> pure modop
             <*> saExpression e
+        
+        (Swap n1 n2) ->
+            Swap
+            <$> saLookup n1
+            <*> saLookup n2
+    
+        (Conditional e1 s1 s2 e2) ->
+            Conditional
+            <$> saExpression e1
+            <*> mapM saStatement s1
+            <*> mapM saStatement s2
+            <*> saExpression e2
+    
+        (Loop e1 s1 s2 e2) ->
+            Loop
+            <$> saExpression e1
+            <*> mapM saStatement s1
+            <*> mapM saStatement s2
+            <*> saExpression e2    
 
+        (LocalBlock n e1 stmt e2) ->
+            do e1' <- saExpression e1
+               enterScope
+               n' <- saInsert (LocalVariable IntegerType n) n
+               stmt' <- mapM saStatement stmt
+               leaveScope
+               e2' <- saExpression e2
+               return $ LocalBlock n' e1' stmt' e2'
+    
+        (LocalCall m args) ->
+            LocalCall
+            <$> saLookup m
+            <*> localCall m args
+    
+        (LocalUncall m args) ->
+            LocalUncall
+            <$> saLookup m
+            <*> localCall m args
+                        
         (ObjectCall o m args) ->
             when (args /= nub args || o `elem` args) (throwError $ "Irreversible invocation of method " ++ m)
             >> ObjectCall
@@ -133,11 +171,14 @@ saStatement s =
                return $ ObjectDestruction tp n'
 
         (ObjectBlock tp n stmt) ->
-                    do enterScope
-                       n' <- saInsert (LocalVariable (ObjectType tp) n) n
-                       stmt' <- mapM saStatement stmt
-                       leaveScope
-                       return $ ObjectBlock tp n' stmt'
+            do enterScope
+               n' <- saInsert (LocalVariable (ObjectType tp) n) n
+               stmt' <- mapM saStatement stmt
+               leaveScope
+               return $ ObjectBlock tp n' stmt'
+
+        Skip -> pure Skip               
+
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
           var _ = []
@@ -214,4 +255,5 @@ scopeAnalysis (p, s) = runStateT (runSA $ saProgram p) $ initialState s
 
 -- |Pretty prints the current Scope Analysis State Monad
 -- printSAState :: (_, SAState) -> IO ()
+printSAState :: (Show a, MonadIO m) => (t, a) -> m ()
 printSAState (_, s) = pPrint s

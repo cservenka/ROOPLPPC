@@ -16,18 +16,40 @@ import AST
 keywords :: [String]
 keywords =
     ["class",
+    --  "inherits", -- TODO: Implement
      "method",
      "call",
      "uncall",
-     "int",
-     "new",
-     "delete",
      "construct",
-     "destruct"]
+     "destruct",
+     "skip",
+     "from",
+     "do",
+     "loop",
+     "until",
+     "int",
+     "nil",
+     "if",
+     "then",
+     "else",
+     "fi",
+     "local",
+     "delocal",
+     "new",
+     "delete"]
 
 --Operator precedence identical to C
 operatorTable :: [[(String, BinOp)]]
-operatorTable =[ [("+", Add)] ]
+operatorTable =
+    [ [("*", Mul), ("/", Div), ("%", Mod)],
+      [("+", Add), ("-", Sub)],
+      [("<", Lt), ("<=", Lte), (">", Gt), (">=", Gte)],
+      [("=", Eq), ("!=", Neq)],
+      [("&", BitAnd)],
+      [("^", Xor)],
+      [("|", BitOr)],
+      [("&&", And)],
+      [("||", Or)] ]    
 
 languageDef :: Token.LanguageDef st
 languageDef =
@@ -92,9 +114,52 @@ expression = buildExpressionParser opTable $ constant <|> variable <|> nil
 {-- Statement Parsers --}
 modOp :: Parser ModOp
 modOp = ModAdd <$ symbol "+="
+    <|> ModSub <$ symbol "-="
+    <|> ModXor <$ symbol "^="
 
 assign :: Parser Statement
 assign = Assign <$> identifier <*> modOp <*> expression
+
+swap :: Parser Statement
+swap = Swap <$> identifier <* symbol "<=>" <*> identifier
+
+conditional :: Parser Statement
+conditional =
+    reserved "if"
+    >> Conditional
+    <$> expression
+    <* reserved "then"
+    <*> block
+    <* reserved "else"
+    <*> block
+    <* reserved "fi"
+    <*> expression
+
+loop :: Parser Statement
+loop =
+    reserved "from"
+    >> Loop
+    <$> expression
+    <* reserved "do"
+    <*> block
+    <* reserved "loop"
+    <*> block
+    <* reserved "until"
+    <*> expression
+
+localCall :: Parser Statement
+localCall =
+    reserved "call"
+    >> LocalCall
+    <$> methodName
+    <*> parens (commaSep identifier)
+
+localUncall :: Parser Statement
+localUncall =
+    reserved "uncall"
+    >> LocalUncall
+    <$> methodName
+    <*> parens (commaSep identifier)
 
 objectCall :: Parser Statement
 objectCall =
@@ -130,6 +195,21 @@ objectDestruction =
     <$> typeName
     <*> identifier
 
+localBlock :: Parser Statement
+localBlock =
+    reserved "local"
+    >> reserved "int"
+    >> LocalBlock
+    <$> identifier
+    <* symbol "="
+    <*> expression
+    <*> block
+    <* reserved "delocal"
+    <* reserved "int"
+    <* identifier
+    <* symbol "="
+    <*> expression
+        
 objectBlock :: Parser Statement
 objectBlock =
     reserved "construct"
@@ -140,13 +220,23 @@ objectBlock =
     <* reserved "destruct"
     <* identifier
 
+skip :: Parser Statement
+skip = Skip <$ reserved "skip"
+
 statement :: Parser Statement
 statement = try assign
+        <|> swap
+        <|> conditional
+        <|> loop
+        <|> try localCall
+        <|> try localUncall
         <|> objectCall
         <|> objectUncall
+        <|> localBlock
+        <|> objectBlock
         <|> objectConstruction
         <|> objectDestruction
-        <|> objectBlock
+        <|> skip
 
 block :: Parser [Statement]
 block = many1 statement

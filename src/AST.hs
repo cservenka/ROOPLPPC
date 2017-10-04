@@ -7,10 +7,9 @@ type TypeName = String
 
 type MethodName = String
 
-data DataType
-  = IntegerType
-  | ObjectType TypeName
-  | NilType
+data DataType = IntegerType
+              | ObjectType TypeName
+              | NilType
   deriving (Show)
 
 -- Types
@@ -23,58 +22,67 @@ instance Eq DataType where
   _ == _ = False
 
 -- Binary Operators
-data BinOp =
-  Add
+data BinOp = Add
+           | Sub
+           | Xor
+           | Mul
+           | Div
+           | Mod
+           | BitAnd
+           | BitOr
+           | And
+           | Or
+           | Lt
+           | Gt
+           | Eq
+           | Neq
+           | Lte
+           | Gte 
   deriving (Show, Eq, Enum)
 
-data ModOp =
-  ModAdd
+data ModOp = ModAdd
+           | ModSub
+           | ModXor
   deriving (Show, Eq, Enum)
 
 {-- Generic AST Definitions --}
 --Expressions
-data GExpr v
-  = Constant Integer
-  | Variable v
-  | Nil
-  | Binary BinOp
-           (GExpr v)
-           (GExpr v)
+data GExpr v = Constant Integer
+             | Variable v
+             | Nil
+             | Binary BinOp (GExpr v) (GExpr v)
   deriving (Show, Eq)
 
 --Statements
-data GStmt m v
-  = Assign v ModOp (GExpr v)
-  | ObjectCall v MethodName [v]
-  | ObjectUncall v MethodName [v]
-  | ObjectConstruction TypeName v
-  | ObjectDestruction TypeName v
-  | ObjectBlock TypeName v [GStmt m v]
+data GStmt m v = Assign v ModOp (GExpr v)
+               | Swap v v
+               | Conditional (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
+               | Loop (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
+               | ObjectBlock TypeName v [GStmt m v]
+               | LocalBlock v (GExpr v) [GStmt m v] (GExpr v)
+               | LocalCall m [v]
+               | LocalUncall m [v]
+               | ObjectCall v MethodName [v]
+               | ObjectUncall v MethodName [v]
+               | ObjectConstruction TypeName v
+               | ObjectDestruction TypeName v
+               | Skip
   deriving (Show, Eq)
 
 --Field/Parameter declarations
-data GDecl v =
-  GDecl DataType
-        v
+data GDecl v = GDecl DataType v
   deriving (Show, Eq)
 
 --Method: Name, parameters, body
-data GMDecl m v =
-  GMDecl m
-         [GDecl v]
-         [GStmt m v]
+data GMDecl m v = GMDecl m [GDecl v] [GStmt m v]
   deriving (Show, Eq)
 
 --Class: Name, fields, methods
-data GCDecl m v =
-  GCDecl TypeName
-         [GDecl v]
-         [GMDecl m v]
+data GCDecl m v = GCDecl TypeName [GDecl v] [GMDecl m v]
   deriving (Show, Eq)
 
 --Program
-data GProg m v =
-  GProg [GCDecl m v]
+newtype GProg m v = GProg [GCDecl m v]
   deriving (Show, Eq)
 
 {-- Specific AST Definitions --}
@@ -109,17 +117,10 @@ type SProgram = [(TypeName, GMDecl SIdentifier SIdentifier)]
 {-- Other Definitions --}
 type Offset = Integer
 
-data Symbol
-  = LocalVariable DataType
-                  Identifier
-  | ClassField DataType
-               Identifier
-               TypeName
-               Offset
-  | MethodParameter DataType
-                    Identifier
-  | Method [DataType]
-           MethodName
+data Symbol = LocalVariable DataType Identifier
+            | ClassField DataType Identifier TypeName Offset
+            | MethodParameter DataType Identifier
+            | Method [DataType] MethodName
   deriving (Show, Eq)
 
 type SymbolTable = [(SIdentifier, Symbol)]

@@ -1,25 +1,25 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
-module CodeGenerator
-  ( generatePISA,
+module CodeGenerator( 
+    generatePISA,
     showPISAProgram
-  ) where
+) where
 
-import           Data.List
+import Data.List
 
-import           Control.Arrow
-import           Control.Monad.Except
-import           Control.Monad.State
+import Control.Arrow
+import Control.Monad.Except
+import Control.Monad.State
 
 import Debug.Trace (trace, traceShow)
 
 import Text.Pretty.Simple (pPrint)
 
-import           AST
-import           ClassAnalyzer
-import           PISA
-import           ScopeAnalyzer
+import AST
+import ClassAnalyzer
+import PISA
+import ScopeAnalyzer
 
 {-# ANN module "HLint: ignore Reduce duplication" #-}
 
@@ -84,8 +84,8 @@ popTempRegister = modify $ \s -> s { registerIndex = (-1) + registerIndex s }
 lookupRegister :: SIdentifier -> CodeGenerator Register
 lookupRegister i = gets registerStack >>= \rs ->
     case lookup i rs of
-        Nothing -> traceShow(rs) throwError $ "ICE: No register reserved for index " ++ show i
-        (Just r) -> traceShow(rs) return r
+        Nothing -> throwError $ "ICE: No register reserved for index " ++ show i
+        (Just r) -> traceShow rs return r
 
 -- | Returns the method name of a valid method identifier
 getMethodName :: SIdentifier -> CodeGenerator MethodName
@@ -94,7 +94,7 @@ getMethodName i = gets (symbolTable . saState) >>= \st ->
         (Just (Method _ n)) -> return n
         _ -> throwError $ "ICE: Invalid method index " ++ show i
 
--- | Inserts a unique method label in the lable table for a given mathod identifier
+-- | Inserts a unique method label in the label table for a given method identifier
 insertMethodLabel :: SIdentifier -> CodeGenerator ()
 insertMethodLabel m =
     do n <- getMethodName m
@@ -131,73 +131,88 @@ loadVariableValue n =
        rv <- tempRegister
        return (rv, la ++ [(Nothing, EXCH rv ra)], popTempRegister >> ua)
 
+-- | Returns pointer to free list at given index      
+loadFreeListAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())        
+loadFreeListAddress index =  
+    do rfl <- tempRegister
+       let getAddress = [(Nothing, XOR rfl registerFLPs),
+                         (Nothing, ADD rfl index)]
+       return (rfl, getAddress, popTempRegister)
+
+       
+loadFirstFreeListBlockAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
+loadFirstFreeListBlockAddress index =
+    do (r_free_list_address, la, ua) <- loadFreeListAddress index
+       r_block_address <- tempRegister
+       return (r_block_address, la ++ [(Nothing, EXCH r_block_address r_free_list_address)], popTempRegister >> ua) 
+
 -- | Code generation for binary operators
 cgBinOp :: BinOp -> Register -> Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
 cgBinOp Add r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt r1), (Nothing, ADD rt r2)], popTempRegister)
--- cgBinOp Sub r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt r1), (Nothing, SUB rt r2)], popTempRegister)
--- cgBinOp Xor r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt r1), (Nothing, XOR rt r2)], popTempRegister)
--- cgBinOp BitAnd r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, ANDX rt r1 r2)], popTempRegister)
--- cgBinOp BitOr r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, ORX rt r1 r2)], popTempRegister)
--- cgBinOp Lt r1 r2 =
---     do rt <- tempRegister
---        rc <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Nothing, XOR rt r1),
---                   (Nothing, SUB rt r2),
---                   (Just l_top, BGEZ rt l_bot),
---                   (Nothing, XORI rc $ Immediate 1),
---                   (Just l_bot, BGEZ rt l_top)]
---        return (rc, cmp, popTempRegister >> popTempRegister)
--- cgBinOp Gt r1 r2 =
---     do rt <- tempRegister
---        rc <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Nothing, XOR rt r1),
---                   (Nothing, SUB rt r2),
---                   (Just l_top, BLEZ rt l_bot),
---                   (Nothing, XORI rc $ Immediate 1),
---                   (Just l_bot, BLEZ rt l_top)]
---        return (rc, cmp, popTempRegister >> popTempRegister)
--- cgBinOp Eq r1 r2 =
---     do rt <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Just l_top, BNE r1 r2 l_bot),
---                   (Nothing, XORI rt $ Immediate 1),
---                   (Just l_bot, BNE r1 r2 l_top)]
---        return (rt, cmp, popTempRegister)
--- cgBinOp Neq r1 r2 =
---     do rt <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Just l_top, BEQ r1 r2 l_bot),
---                   (Nothing, XORI rt $ Immediate 1),
---                   (Just l_bot, BEQ r1 r2 l_top)]
---        return (rt, cmp, popTempRegister)
--- cgBinOp Lte r1 r2 =
---     do rt <- tempRegister
---        rc <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Nothing, XOR rt r1),
---                   (Nothing, SUB rt r2),
---                   (Just l_top, BGTZ rt l_bot),
---                   (Nothing, XORI rc $ Immediate 1),
---                   (Just l_bot, BGTZ rt l_top)]
---        return (rc, cmp, popTempRegister >> popTempRegister)
--- cgBinOp Gte r1 r2 =
---     do rt <- tempRegister
---        rc <- tempRegister
---        l_top <- getUniqueLabel "cmp_top"
---        l_bot <- getUniqueLabel "cmp_bot"
---        let cmp = [(Nothing, XOR rt r1),
---                   (Nothing, SUB rt r2),
---                   (Just l_top, BLTZ rt l_bot),
---                   (Nothing, XORI rc $ Immediate 1),
---                   (Just l_bot, BLTZ rt l_top)]
---        return (rc, cmp, popTempRegister >> popTempRegister)
+cgBinOp Sub r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt r1), (Nothing, SUB rt r2)], popTempRegister)
+cgBinOp Xor r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt r1), (Nothing, XOR rt r2)], popTempRegister)
+cgBinOp BitAnd r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, ANDX rt r1 r2)], popTempRegister)
+cgBinOp BitOr r1 r2 = tempRegister >>= \rt -> return (rt, [(Nothing, ORX rt r1 r2)], popTempRegister)
+cgBinOp Lt r1 r2 =
+    do rt <- tempRegister
+       rc <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Nothing, XOR rt r1),
+                  (Nothing, SUB rt r2),
+                  (Just l_top, BGEZ rt l_bot),
+                  (Nothing, XORI rc $ Immediate 1),
+                  (Just l_bot, BGEZ rt l_top)]
+       return (rc, cmp, popTempRegister >> popTempRegister)
+cgBinOp Gt r1 r2 =
+    do rt <- tempRegister
+       rc <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Nothing, XOR rt r1),
+                  (Nothing, SUB rt r2),
+                  (Just l_top, BLEZ rt l_bot),
+                  (Nothing, XORI rc $ Immediate 1),
+                  (Just l_bot, BLEZ rt l_top)]
+       return (rc, cmp, popTempRegister >> popTempRegister)
+cgBinOp Eq r1 r2 =
+    do rt <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Just l_top, BNE r1 r2 l_bot),
+                  (Nothing, XORI rt $ Immediate 1),
+                  (Just l_bot, BNE r1 r2 l_top)]
+       return (rt, cmp, popTempRegister)
+cgBinOp Neq r1 r2 =
+    do rt <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Just l_top, BEQ r1 r2 l_bot),
+                  (Nothing, XORI rt $ Immediate 1),
+                  (Just l_bot, BEQ r1 r2 l_top)]
+       return (rt, cmp, popTempRegister)
+cgBinOp Lte r1 r2 =
+    do rt <- tempRegister
+       rc <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Nothing, XOR rt r1),
+                  (Nothing, SUB rt r2),
+                  (Just l_top, BGTZ rt l_bot),
+                  (Nothing, XORI rc $ Immediate 1),
+                  (Just l_bot, BGTZ rt l_top)]
+       return (rc, cmp, popTempRegister >> popTempRegister)
+cgBinOp Gte r1 r2 =
+    do rt <- tempRegister
+       rc <- tempRegister
+       l_top <- getUniqueLabel "cmp_top"
+       l_bot <- getUniqueLabel "cmp_bot"
+       let cmp = [(Nothing, XOR rt r1),
+                  (Nothing, SUB rt r2),
+                  (Just l_top, BLTZ rt l_bot),
+                  (Nothing, XORI rc $ Immediate 1),
+                  (Just l_bot, BLTZ rt l_top)]
+       return (rc, cmp, popTempRegister >> popTempRegister)
 cgBinOp _ _ _ = throwError "ICE: Binary operator not implemented"
 
 -- | Code generation for expressions
@@ -232,68 +247,66 @@ cgAssign n modop e =
        ue >> ut
        return $ lt ++ le ++ [(Nothing, cgModOp modop rt re)] ++ invertInstructions (lt ++ le)
     where cgModOp ModAdd = ADD
---           cgModOp ModSub = SUB -- TODO
---           cgModOp ModXor = XOR -- TODO
+          cgModOp ModSub = SUB 
+          cgModOp ModXor = XOR
 
--- TODO
--- loadForSwap :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
--- loadForSwap n = gets (symbolTable . saState) >>= \st ->
---     case lookup n st of
---         (Just ClassField {}) -> loadVariableValue n
---         (Just (LocalVariable IntegerType _)) -> loadVariableValue n
---         (Just (LocalVariable (ObjectType _) _)) -> loadVariableAddress n
---         (Just (MethodParameter IntegerType _)) -> loadVariableValue n
---         (Just (MethodParameter (ObjectType _) _)) -> loadVariableAddress n
---         _ -> throwError $ "ICE: Invalid variable index " ++ show n
+loadForSwap :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
+loadForSwap n = gets (symbolTable . saState) >>= \st ->
+    case lookup n st of
+        (Just ClassField {}) -> loadVariableValue n
+        (Just (LocalVariable IntegerType _)) -> loadVariableValue n
+        (Just (LocalVariable (ObjectType _) _)) -> loadVariableAddress n
+        (Just (MethodParameter IntegerType _)) -> loadVariableValue n
+        (Just (MethodParameter (ObjectType _) _)) -> loadVariableAddress n
+        _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
--- TODO
--- cgSwap :: SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgSwap n1 n2 = if n1 == n2 then return [] else
---     do (r1, l1, u1) <- loadForSwap n1
---        (r2, l2, u2) <- loadForSwap n2
---        u2 >> u1
---        let swap = [(Nothing, XOR r1 r2), (Nothing, XOR r2 r1), (Nothing, XOR r1 r2)]
---        return $ l1 ++ l2 ++ swap ++ invertInstructions (l1 ++ l2)
+cgSwap :: SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgSwap n1 n2 = if n1 == n2 then return [] else
+    do (r1, l1, u1) <- loadForSwap n1
+       (r2, l2, u2) <- loadForSwap n2
+       u2 >> u1
+       let swap = [(Nothing, XOR r1 r2), (Nothing, XOR r2 r1), (Nothing, XOR r1 r2)]
+       return $ l1 ++ l2 ++ swap ++ invertInstructions (l1 ++ l2)
 
--- TODO
--- cgConditional :: SExpression -> [SStatement] -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgConditional e1 s1 s2 e2 =
---     do l_test <- getUniqueLabel "test"
---        l_assert_t <- getUniqueLabel "assert_true"
---        l_test_f <- getUniqueLabel "test_false"
---        l_assert <- getUniqueLabel "assert"
---        rt <- tempRegister
---        (re1, le1, ue1) <- cgBinaryExpression e1
---        ue1
---        s1' <- concat <$> mapM cgStatement s1
---        s2' <- concat <$> mapM cgStatement s2
---        (re2, le2, ue2) <- cgBinaryExpression e2
---        ue2 >> popTempRegister --rt
---        return $ le1 ++ [(Nothing, XOR rt re1)] ++ invertInstructions le1 ++
---                 [(Just l_test, BEQ rt registerZero l_test_f), (Nothing, XORI rt $ Immediate 1)] ++
---                 s1' ++ [(Nothing, XORI rt $ Immediate 1), (Just l_assert_t, BRA l_assert), (Just l_test_f, BRA l_test)] ++
---                 s2' ++ [(Just l_assert, BNE rt registerZero l_assert_t)] ++
---                 le2 ++ [(Nothing, XOR rt re2)] ++ invertInstructions le2
+-- | Code generation for conditionals
+cgConditional :: SExpression -> [SStatement] -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
+cgConditional e1 s1 s2 e2 =
+    do l_test <- getUniqueLabel "test"
+       l_assert_t <- getUniqueLabel "assert_true"
+       l_test_f <- getUniqueLabel "test_false"
+       l_assert <- getUniqueLabel "assert"
+       rt <- tempRegister
+       (re1, le1, ue1) <- cgBinaryExpression e1
+       ue1
+       s1' <- concat <$> mapM cgStatement s1
+       s2' <- concat <$> mapM cgStatement s2
+       (re2, le2, ue2) <- cgBinaryExpression e2
+       ue2 >> popTempRegister --rt
+       return $ le1 ++ [(Nothing, XOR rt re1)] ++ invertInstructions le1 ++
+                [(Just l_test, BEQ rt registerZero l_test_f), (Nothing, XORI rt $ Immediate 1)] ++
+                s1' ++ [(Nothing, XORI rt $ Immediate 1), (Just l_assert_t, BRA l_assert), (Just l_test_f, BRA l_test)] ++
+                s2' ++ [(Just l_assert, BNE rt registerZero l_assert_t)] ++
+                le2 ++ [(Nothing, XOR rt re2)] ++ invertInstructions le2
 
--- TODO
--- cgLoop :: SExpression -> [SStatement] -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgLoop e1 s1 s2 e2 =
---     do l_entry <- getUniqueLabel "entry"
---        l_test <- getUniqueLabel "test"
---        l_assert <- getUniqueLabel "assert"
---        l_exit <- getUniqueLabel "exit"
---        rt <- tempRegister
---        (re1, le1, ue1) <- cgBinaryExpression e1
---        ue1
---        s1' <- concat <$> mapM cgStatement s1
---        s2' <- concat <$> mapM cgStatement s2
---        (re2, le2, ue2) <- cgBinaryExpression e2
---        ue2 >> popTempRegister --rt
---        return $ [(Nothing, XORI rt $ Immediate 1), (Just l_entry, BEQ rt registerZero l_assert)] ++
---                 le1 ++ [(Nothing, XOR rt re1)] ++ invertInstructions le1 ++
---                 s1' ++ le2 ++ [(Nothing, XOR rt re2)] ++ invertInstructions le2 ++
---                 [(Just l_test, BNE rt registerZero l_exit)] ++ s2' ++
---                 [(Just l_assert, BRA l_entry), (Just l_exit, BRA l_test), (Nothing, XORI rt $ Immediate 1)]
+-- | Code generation for loops
+cgLoop :: SExpression -> [SStatement] -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
+cgLoop e1 s1 s2 e2 =
+    do l_entry <- getUniqueLabel "entry"
+       l_test <- getUniqueLabel "test"
+       l_assert <- getUniqueLabel "assert"
+       l_exit <- getUniqueLabel "exit"
+       rt <- tempRegister
+       (re1, le1, ue1) <- cgBinaryExpression e1
+       ue1
+       s1' <- concat <$> mapM cgStatement s1
+       s2' <- concat <$> mapM cgStatement s2
+       (re2, le2, ue2) <- cgBinaryExpression e2
+       ue2 >> popTempRegister --rt
+       return $ [(Nothing, XORI rt $ Immediate 1), (Just l_entry, BEQ rt registerZero l_assert)] ++
+                le1 ++ [(Nothing, XOR rt re1)] ++ invertInstructions le1 ++
+                s1' ++ le2 ++ [(Nothing, XOR rt re2)] ++ invertInstructions le2 ++
+                [(Just l_test, BNE rt registerZero l_exit)] ++ s2' ++
+                [(Just l_assert, BRA l_entry), (Just l_exit, BRA l_test), (Nothing, XORI rt $ Immediate 1)]
 
 -- | Code generation for object blocks (Stack direction fixed)
 cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -310,24 +323,24 @@ cgObjectBlock tp n stmt =
        return $ create ++ stmt' ++ invertInstructions create
 
 -- | Code generation for local blocks (Stack direction fixed)
--- cgLocalBlock :: SIdentifier -> SExpression -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgLocalBlock n e1 stmt e2 =
---     do rn <- pushRegister n
---        (re1, le1, ue1) <- cgExpression e1
---        rt1 <- tempRegister
---        popTempRegister >> ue1
---        stmt' <- concat <$> mapM cgStatement stmt
---        (re2, le2, ue2) <- cgExpression e2
---        rt2 <- tempRegister
---        popTempRegister >> ue2
---        popRegister --rn
---        let create re rt = [(Nothing, XOR rn registerSP),
---                            (Nothing, XOR rt re),
---                            (Nothing, EXCH rt registerSP),
---                            (Nothing, SUBI registerSP $ Immediate 1)]
---            load = le1 ++ create re1 rt1 ++ invertInstructions le1
---            clear = le2 ++ invertInstructions (create re2 rt2) ++ invertInstructions le2
---        return $ load ++ stmt' ++ clear
+cgLocalBlock :: SIdentifier -> SExpression -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
+cgLocalBlock n e1 stmt e2 =
+    do rn <- pushRegister n
+       (re1, le1, ue1) <- cgExpression e1
+       rt1 <- tempRegister
+       popTempRegister >> ue1
+       stmt' <- concat <$> mapM cgStatement stmt
+       (re2, le2, ue2) <- cgExpression e2
+       rt2 <- tempRegister
+       popTempRegister >> ue2
+       popRegister --rn
+       let create re rt = [(Nothing, XOR rn registerSP),
+                           (Nothing, XOR rt re),
+                           (Nothing, EXCH rt registerSP),
+                           (Nothing, SUBI registerSP $ Immediate 1)]
+           load = le1 ++ create re1 rt1 ++ invertInstructions le1
+           clear = le2 ++ invertInstructions (create re2 rt2) ++ invertInstructions le2
+       return $ load ++ stmt' ++ clear
 
 -- | Code generation for calls (Stack direction fixed)
 cgCall :: [SIdentifier] -> [(Maybe Label, MInstruction)] -> Register -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -340,13 +353,11 @@ cgCall args jump this =
        return $ concat la ++ store ++ jump ++ invertInstructions store ++ invertInstructions (concat la)
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
 
--- TODO
--- cgLocalCall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgLocalCall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, BRA l_m)] registerThis
+cgLocalCall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
+cgLocalCall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, BRA l_m)] registerThis
 
--- TODO
--- cgLocalUncall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
--- cgLocalUncall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, RBRA l_m)] registerThis
+cgLocalUncall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
+cgLocalUncall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, RBRA l_m)] registerThis
 
 -- | Returns the type associated with a given identifier
 getType :: SIdentifier -> CodeGenerator TypeName
@@ -385,7 +396,7 @@ loadForCall n = gets (symbolTable . saState) >>= \st ->
 -- | Code generation for object calls
 cgObjectCall :: SIdentifier -> MethodName -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectCall o m args =
-    do (ro, lo, uo) <- trace ("IN OBJECT CALL") loadForCall o
+    do (ro, lo, uo) <- trace "IN OBJECT CALL" loadForCall o
        rt <- tempRegister
        (rtgt, loadAddress) <- loadMethodAddress (o, rt) m
        l_jmp <- getUniqueLabel "l_jmp"
@@ -401,7 +412,7 @@ cgObjectCall o m args =
 -- | Code generation for object uncalls
 cgObjectUncall :: SIdentifier -> MethodName -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectUncall o m args =
-    do (ro, lo, uo) <- trace ("IN OBJECT UNCALL") loadForCall o
+    do (ro, lo, uo) <- loadForCall o
        rt <- tempRegister
        (rtgt, loadAddress) <- loadMethodAddress (o, rt) m
        l_jmp <- getUniqueLabel "l_jmp"
@@ -418,21 +429,130 @@ cgObjectUncall o m args =
        let load = lo ++ [(Nothing, XOR rt ro)] ++ loadAddress ++ invertInstructions lo
        return $ load ++ call ++ invertInstructions load
 
+
+cgMalloc :: Register -> Register -> Register -> Register -> Label -> TypeName -> CodeGenerator [(Maybe Label, MInstruction)]
+cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp =
+    do l_o_test <- getUniqueLabel "o_test"
+       l_o_assert_t <- getUniqueLabel "o_assert_true"
+       l_o_test_f <- getUniqueLabel "o_test_false"
+       l_o_assert <- getUniqueLabel "o_assert"
+       l_i_test <- getUniqueLabel "i_test"
+       l_i_assert_t <- getUniqueLabel "i_assert_true"
+       l_i_test_f <- getUniqueLabel "i_test_false"
+       l_i_assert <- getUniqueLabel "i_assert"
+       l_m_top <- getUniqueLabel "malloc_top"
+       l_m_bot <- getUniqueLabel "malloc_bot"
+    
+       -- Temp registers needed for malloc
+       rt <- tempRegister
+       rt2 <- tempRegister
+       r_tmp <- tempRegister
+
+       -- Expressions and sub routines
+       (r_e1_outer, l_e1_outer, u_e1_outer) <- cgBinOp Lt r_csize r_object_size
+       (r_e2_outer, l_e2_outer, u_e2_outer) <- cgBinOp Lt r_csize r_object_size
+       (r_fl, l_fl, u_fl) <- loadFreeListAddress r_counter
+       (r_block, l_block, u_block) <- loadFirstFreeListBlockAddress r_counter
+       (r_e1_inner, l_e1_inner, u_e1_inner) <- cgBinOp Neq r_block registerZero
+       (r_e2_i, l_e2_i, u_e2_i) <- cgBinOp Neq r_p r_tmp
+
+       -- Update state
+       u_e2_i >> u_e1_inner >> u_block >> u_fl >> u_e2_outer >> u_e1_outer
+
+       popTempRegister -- r_tmp
+       popTempRegister -- rt2
+       popTempRegister -- rt
+
+       let malloc = [(Just l_m_top, BRA l_m_bot),               -- 
+                     (Nothing, ADDI registerSP $ Immediate 1),  
+                     (Nothing, EXCH registerRO registerSP),-- Pop return offset from stack
+                     (Just l_m_entry, SWAPBR registerRO),  -- Malloc1 entry/exit point
+                     (Nothing, NEG registerRO),            -- Restore return offset
+                     (Nothing, EXCH registerRO registerSP),-- Push return offset to stack
+                     (Nothing, SUBI registerSP $ Immediate 1)]
+                    ++ l_e1_outer                               -- Set r_e1 -> c_size < obj_size
+                    ++ [(Nothing, XOR rt r_e1_outer)]           -- r_t = r_e1_o 
+                    ++ invertInstructions l_e1_outer ++         -- Clear r_e1_o
+                    [(Just l_o_test, BEQ rt registerZero l_o_test_f),
+                     (Nothing, XORI rt $ Immediate 1),          -- S1_outer start
+                     (Nothing, ADDI r_counter $ Immediate 1),   -- counter++
+                     (Nothing, RL r_csize $ Immediate 1),       -- call double(csize)
+                     (Nothing, BRA l_m_entry),                  -- call malloc1()
+                     (Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
+                     (Nothing, XORI rt $ Immediate 1),          -- S1_outer end
+                     (Just l_o_assert_t, BRA l_o_assert),
+                     (Just l_o_test_f, BRA l_o_test)]
+                     -- S2_outer start
+                     ++ l_fl                                    -- Set r_fl -> address of free_list[counter]
+                     ++ l_block                                 -- Set r_block -> value of free_list[counter]
+                     ++ l_e1_inner                              -- Set r_e1_i -> r_block != 0
+                     ++ [(Nothing, XOR rt2 r_e1_inner)]         -- Set rt2 -> r_e1_i         
+                     ++ invertInstructions l_e1_inner           -- Clear r_e1_i
+                     ++ invertInstructions l_block
+                     ++ invertInstructions l_fl ++
+                    [(Just l_i_test, BEQ rt2 r_e1_inner l_i_test_f),
+                     (Nothing, XORI rt2 $ Immediate 1)]         -- S1_inner start
+                    ++ l_fl
+                    ++ l_block ++
+                    [--(Nothing, EXCH r_block r_fl),              -- Get address of block stored in current free list
+                     (Nothing, ADD r_p r_block),                -- Set address of p to said block
+                     (Nothing, SUB r_block r_p),                -- Clear r_block
+                     (Nothing, EXCH r_tmp r_p),                 -- Load address of next block
+                     (Nothing, EXCH r_tmp r_fl),                -- Set address of next block as head of current free list
+                     (Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
+                     (Nothing, EXCH r_tmp r_p),                 -- Store address of vtable in newly alloc'd obj
+                     (Nothing, XORI rt2 $ Immediate 1),         -- S1_inner end
+                     (Just l_i_assert_t, BRA l_i_assert),
+                     (Just l_i_test_f, BRA l_i_test),
+                     (Nothing, ADDI r_counter $ Immediate 1)]   -- S2_inner start
+                    ++
+                    [(Nothing, RL r_csize $ Immediate 1),       -- call double(csize)
+                     (Nothing, BRA l_m_entry),                  -- call malloc1()
+                     (Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
+                     (Nothing, SUBI r_counter $ Immediate 1)]   -- counter -= 1
+                    ++ l_block
+                     ++ l_fl ++ 
+                    [(Nothing, XOR r_tmp r_p),                  -- Copy current address of p
+                     (Nothing, EXCH r_tmp r_fl),                -- Store address in current free list
+                     (Nothing, ADD r_p r_csize),                -- Set p to other half of the block we're splitting
+                     (Just l_i_assert, BNE rt2 registerZero l_i_assert_t),
+                     (Nothing, XOR r_tmp r_p),
+                     (Nothing, SUB r_tmp r_csize)]    
+                     ++ l_e2_i                              -- set r_i_2 -> p - csize != free_list[counter]
+                     ++ [(Nothing, XOR rt2 r_e2_i)]          -- Set rt2 -> r_i_2
+                     ++ invertInstructions l_e2_i           -- Clear r_i_2
+                     ++ invertInstructions l_block
+                     ++ invertInstructions l_fl ++
+                     [(Nothing, ADD r_tmp r_csize),
+                      (Nothing, XOR r_tmp r_p),             -- S2_outer end 
+                      (Just l_o_assert, BNE rt registerZero l_o_assert_t)]         
+                     ++ l_e2_outer                            -- Set r_e1 -> c_size < obj_size
+                     ++ [(Nothing, XOR rt r_e2_outer)]        -- r_t = r_e1_o 
+                     ++ invertInstructions l_e2_outer         -- Clear r_e1_o
+                     ++ [(Just l_m_bot, BRA l_m_top)]         -- Go to top
+       return malloc
+
 -- | Code generation for object construction
 cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectConstruction tp n =
-    do rn <- trace ("IN OBJECT CONSTRUCTION") pushRegister n
-       popRegister --rn
-       let create = [(Nothing, XOR rn registerSP),
-                     (Nothing, XORI rn $ AddressMacro $ "l_" ++ tp ++ "_vt"),
-                     (Nothing, EXCH rn registerSP),
-                     (Nothing, ADDI registerSP $ SizeMacro tp)]
-       return $ create ++ invertInstructions create
+    do r_p <- pushRegister n
+       r_object_size <- tempRegister
+       r_counter <- tempRegister
+       r_csize <- tempRegister
+       l_m_entry <- getUniqueLabel "malloc_entry"
+
+       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
+       let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
+                   (Nothing, XOR r_counter registerZero),
+                   (Nothing, ADDI r_object_size $ SizeMacro tp)]
+       malloc1 <- cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp       
+       return $ malloc ++ [(Nothing, BRA l_m_entry)] ++ malloc1 ++ invertInstructions malloc
 
 -- | Code generation for object destruction
+-- TODO: Implement
 cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectDestruction tp n =
-    do rv <- trace ("IN OBJECT DESTRUCTION") tempRegister
+    do rv <- tempRegister
        popTempRegister --rv
        let create = [(Nothing, XOR rv registerSP),
                      (Nothing, XORI rv $ AddressMacro $ "l_" ++ tp ++ "_vt"),
@@ -443,18 +563,18 @@ cgObjectDestruction tp n =
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
 cgStatement (Assign n modop e) = cgAssign n modop e
--- cgStatement (Swap n1 n2) = cgSwap n1 n2 -- TODO
--- cgStatement (Conditional e1 s1 s2 e2) = cgConditional e1 s1 s2 e2 -- TODO
--- cgStatement (Loop e1 s1 s2 e2) = cgLoop e1 s1 s2 e2 -- TODO
+cgStatement (Swap n1 n2) = cgSwap n1 n2
+cgStatement (Conditional e1 s1 s2 e2) = cgConditional e1 s1 s2 e2
+cgStatement (Loop e1 s1 s2 e2) = cgLoop e1 s1 s2 e2
 cgStatement (ObjectBlock tp n stmt) = cgObjectBlock tp n stmt
--- cgStatement (LocalBlock n e1 stmt e2) = cgLocalBlock n e1 stmt e2 --TODO
--- cgStatement (LocalCall m args) = cgLocalCall m args --TODO
--- cgStatement (LocalUncall m args) = cgLocalUncall m args --TODO
+cgStatement (LocalBlock n e1 stmt e2) = cgLocalBlock n e1 stmt e2
+cgStatement (LocalCall m args) = cgLocalCall m args
+cgStatement (LocalUncall m args) = cgLocalUncall m args
 cgStatement (ObjectCall o m args) = cgObjectCall o m args
 cgStatement (ObjectUncall o m args) = cgObjectUncall o m args
 cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
 cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
--- cgStatement Skip = return [] -- TODO
+cgStatement Skip = return []
 
 -- | Code generation for methods (Stack direction fixed)
 cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -502,7 +622,7 @@ getMainClass = gets (mainClass . caState . saState) >>= \mc ->
         Nothing -> throwError "ICE: No main method defined"
 
 -- | Fetches the field of a given type name
--- TODO: Inheritance
+-- FIXME: Inheritance
 getFields :: TypeName -> CodeGenerator [VariableDeclaration]
 getFields tp =
     do cs <- gets (classes . caState . saState)
@@ -535,7 +655,7 @@ cgProgram p =
     do vt <- cgVirtualTables
        rv <- tempRegister -- V table register
        rb <- tempRegister -- Memory block register
-       popTempRegister
+       popTempRegister >> popTempRegister
        ms <- concat <$> mapM cgMethod p
        l_main <- getMainLabel
        mtp <- getMainClass
@@ -545,12 +665,12 @@ cgProgram p =
                  (Nothing, START),
                  (Nothing, ADDI registerFLPs ProgramSize),    -- Init free list pointer list
                  (Nothing, XOR registerHP registerFLPs),      -- Init heap pointer
-                 (Nothing, ADDI registerHP FreeListsSize),    -- Init space for FLPs list
+                 (Nothing, ADDI registerHP FreeListsSize),    -- Init space for FLPs list TODO: Check for off by one her
                  (Nothing, XOR rb registerHP),                -- Store address of initial memory block in rb
                  (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
-                 (Nothing, SUBI registerFLPs $ Immediate 4),  -- Index to last element of free lists
+                 (Nothing, SUBI registerFLPs $ Immediate 1),  -- Index to last element of free lists
                  (Nothing, EXCH rb registerFLPs),             -- Store address of first block in last element of free lists
-                 (Nothing, ADDI registerFLPs $ Immediate 4),  -- Index to end of free lists
+                 (Nothing, ADDI registerFLPs $ Immediate 1),  -- Index to end of free lists
                  (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
                  (Nothing, ADDI registerSP StackOffset),      -- Init stack pointer
                  (Nothing, XOR registerThis registerSP),      -- Store address of main object
@@ -585,6 +705,5 @@ cgProgram p =
 generatePISA :: (SProgram, SAState) -> Except String (PISA.MProgram, SAState)
 generatePISA (p, s) = second saState <$> runStateT (runCG $ cgProgram p) (initialState s)
 
-
--- showPISAProgram :: (PISA.MProgram, SAState) -> IO ()
+showPISAProgram :: (Show a, MonadIO m) => (t, a) -> m ()
 showPISAProgram (_, s) = pPrint s

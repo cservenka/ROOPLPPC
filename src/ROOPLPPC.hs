@@ -1,7 +1,6 @@
 import Control.Monad.Except
 import System.IO
 
-import AST
 import PISA
 import Parser
 import ClassAnalyzer
@@ -20,7 +19,7 @@ main =
 --        either (hPutStrLn stderr) printSAState (compileProgram input)
 --        either (hPutStrLn stderr) showPISAProgram (compileProgram input)
 --        either (hPutStrLn stderr) (putStr . showProgram) (compileProgram input)
-       either (hPutStrLn stderr) (writeProgram) (compileProgram input)
+       either (hPutStrLn stderr) writeProgram (compileProgram input)
 
 -- compileProgram :: String -> Either Error (AST.Program, CAState)
 -- compileProgram :: String -> Either String (SProgram, SAState)

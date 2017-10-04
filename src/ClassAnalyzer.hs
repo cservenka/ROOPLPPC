@@ -68,14 +68,14 @@ setClasses c@(GCDecl n _ _) = modify $ \s -> s {classes = (n, c) : classes s}
 -- |Returns the nearest 2^n as size for given class
 getClassSize :: ClassDeclaration -> ClassAnalyzer Size
 getClassSize (GCDecl _ fs _) =
-  return $ 2 ^ ceiling (logBase 2 (1 + genericLength fs))
+  return $ 2 ^ (ceiling :: Double -> Integer) (logBase 2 (1 + genericLength fs))
 
 -- |Set class size in state
 setClassSize :: ClassDeclaration -> ClassAnalyzer ()
 setClassSize c@(GCDecl n _ _) =
   getClassSize c >>= \sz -> modify $ \s -> s {classSize = (n, sz) : classSize s}
 
--- TODO: Inheritance
+-- FIXME: Inheritance
 -- |Returns class methods of a passed class
 resolveClassMethods :: ClassDeclaration -> ClassAnalyzer [MethodDeclaration]
 resolveClassMethods (GCDecl _ _ ms) = return ms

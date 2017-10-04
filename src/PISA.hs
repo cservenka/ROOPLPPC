@@ -9,7 +9,7 @@ import AST (TypeName, MethodName)
 
 type Label = String
 
-data Register = Reg Integer
+newtype Register = Reg Integer
     deriving (Eq)
 
 {-- Generic PISA Definitions --}
@@ -51,7 +51,7 @@ data GInstr i = ADD Register Register
               | SUBI Register i --Pseudo
     deriving (Eq)
 
-data GProg i = GProg [(Maybe Label, GInstr i)]
+newtype GProg i = GProg [(Maybe Label, GInstr i)]
 
 {-- Macro PISA Definitions --}
 

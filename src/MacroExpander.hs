@@ -18,7 +18,6 @@ import ClassAnalyzer
 type Size = Integer
 type Address = Integer
 type Offset = Integer
-type ListSize = Integer
 
 data MEState =
     MEState {
@@ -50,7 +49,7 @@ initialState (GProg p) s =
         sizeTable = (classSize . caState) s,
         offsetTable = getOffsetTable s,
         programSize = genericLength p,
-        freeListsSize = 40,
+        freeListsSize = 1,
         stackOffset = 2048,
         initialMemoryBlockSize = 1024
         }
