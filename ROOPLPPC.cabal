@@ -15,7 +15,13 @@ cabal-version:        >=1.10
 
 executable ROOPLPPC
   main-is:              ROOPLPPC.hs
-  -- other-modules:
+  other-modules:        AST
+                      , ClassAnalyzer
+                      , CodeGenerator
+                      , MacroExpander
+                      , PISA
+                      , Parser
+                      , ScopeAnalyzer
   -- other-extensions:
   build-depends:        base >= 4.7 && < 5
                       , text
