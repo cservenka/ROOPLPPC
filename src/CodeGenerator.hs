@@ -139,7 +139,7 @@ loadFreeListAddress index =
                          (Nothing, ADD rfl index)]
        return (rfl, getAddress, popTempRegister)
 
-       
+-- | Returns pointer to the block which is the head of the free list with given index
 loadFirstFreeListBlockAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
 loadFirstFreeListBlockAddress index =
     do (r_free_list_address, la, ua) <- loadFreeListAddress index
@@ -541,11 +541,12 @@ cgObjectConstruction tp n =
        r_csize <- tempRegister
        l_m_entry <- getUniqueLabel "malloc_entry"
 
-       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
        let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
                    (Nothing, XOR r_counter registerZero),
                    (Nothing, ADDI r_object_size $ SizeMacro tp)]
-       malloc1 <- cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp       
+
+       malloc1 <- cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp    
+       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
        return $ malloc ++ [(Nothing, BRA l_m_entry)] ++ malloc1 ++ invertInstructions malloc
 
 -- | Code generation for object destruction
