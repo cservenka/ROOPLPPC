@@ -133,18 +133,27 @@ loadVariableValue n =
 
 -- | Returns pointer to free list at given index      
 loadFreeListAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())        
-loadFreeListAddress index =  
-    do rfl <- tempRegister
-       let getAddress = [(Nothing, XOR rfl registerFLPs),
-                         (Nothing, ADD rfl index)]
-       return (rfl, getAddress, popTempRegister)
+loadFreeListAddress index = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt registerFLPs), (Nothing, ADD rt index)], popTempRegister)
 
 -- | Returns pointer to the block which is the head of the free list with given index
 loadFirstFreeListBlockAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
 loadFirstFreeListBlockAddress index =
     do (r_free_list_address, la, ua) <- loadFreeListAddress index
        r_block_address <- tempRegister
-       return (r_block_address, la ++ [(Nothing, EXCH r_block_address r_free_list_address)], popTempRegister >> ua) 
+       r_tmp <- tempRegister
+       let copyAddress = [(Nothing, EXCH r_tmp r_free_list_address), 
+                          (Nothing, XOR r_block_address r_tmp),
+                          (Nothing, EXCH r_tmp r_free_list_address)]
+       return (r_block_address, la ++ copyAddress, popTempRegister >> popTempRegister >> ua) 
+
+loadHeadAtFreeList :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
+loadHeadAtFreeList ra =
+    do rv <- tempRegister
+       rt <- tempRegister
+       let copyAddress = [(Nothing, EXCH rt ra), 
+                          (Nothing, XOR rv rt),
+                          (Nothing, EXCH rt ra)]
+       return (rv, copyAddress, popTempRegister >> popTempRegister) 
 
 -- | Code generation for binary operators
 cgBinOp :: BinOp -> Register -> Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
@@ -313,10 +322,11 @@ cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Mayb
 cgObjectBlock tp n stmt =
     do rn <- pushRegister n
        rv <- tempRegister
+       label <- getUniqueLabel "object_block"
        popTempRegister --rv
        stmt' <- concat <$> mapM cgStatement stmt
        popRegister --rn
-       let create = [(Nothing, XOR rn registerSP),
+       let create = [(Just label, XOR rn registerSP),
                      (Nothing, XORI rv $ AddressMacro $ "l_" ++ tp ++ "_vt"),
                      (Nothing, EXCH rv registerSP),
                      (Nothing, SUBI registerSP $ SizeMacro tp)]
@@ -430,8 +440,9 @@ cgObjectUncall o m args =
        return $ load ++ call ++ invertInstructions load
 
 
-cgMalloc :: Register -> Register -> Register -> Register -> Label -> TypeName -> CodeGenerator [(Maybe Label, MInstruction)]
-cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp =
+-- TODO: Push temp regs to stack before branching. Pop afterwards       
+cgMalloc :: Register -> Register -> Register -> Register -> TypeName -> CodeGenerator (Label, [(Maybe Label, MInstruction)])
+cgMalloc r_p r_object_size r_counter r_csize tp =
     do l_o_test <- getUniqueLabel "o_test"
        l_o_assert_t <- getUniqueLabel "o_assert_true"
        l_o_test_f <- getUniqueLabel "o_test_false"
@@ -442,6 +453,7 @@ cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp =
        l_i_assert <- getUniqueLabel "i_assert"
        l_m_top <- getUniqueLabel "malloc_top"
        l_m_bot <- getUniqueLabel "malloc_bot"
+       l_m_entry <- getUniqueLabel "m_entry"
     
        -- Temp registers needed for malloc
        rt <- tempRegister
@@ -452,86 +464,89 @@ cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp =
        (r_e1_outer, l_e1_outer, u_e1_outer) <- cgBinOp Lt r_csize r_object_size
        (r_e2_outer, l_e2_outer, u_e2_outer) <- cgBinOp Lt r_csize r_object_size
        (r_fl, l_fl, u_fl) <- loadFreeListAddress r_counter
-       (r_block, l_block, u_block) <- loadFirstFreeListBlockAddress r_counter
+       (r_block, l_block, u_block) <- loadHeadAtFreeList r_fl
        (r_e1_inner, l_e1_inner, u_e1_inner) <- cgBinOp Neq r_block registerZero
-       (r_e2_i, l_e2_i, u_e2_i) <- cgBinOp Neq r_p r_tmp
+       (r_e2_i1, l_e2_i1, u_e2_i1) <- cgBinOp Neq r_p r_tmp
+       (r_e2_i2, l_e2_i2, u_e2_i2) <- cgBinOp Eq r_tmp registerZero
+       (r_e2_i3, l_e2_i3, u_e2_i3) <- cgBinOp BitOr r_e2_i1 r_e2_i2
 
-       -- Update state
-       u_e2_i >> u_e1_inner >> u_block >> u_fl >> u_e2_outer >> u_e1_outer
-
-       popTempRegister -- r_tmp
-       popTempRegister -- rt2
-       popTempRegister -- rt
+       let tmpRegisterList = [rt, rt2, r_tmp, r_e1_outer, r_e2_outer, r_fl, r_block, r_e1_inner, r_e2_i1, r_e2_i2, r_e2_i3]
+       
+       -- Update state after evaluating expressions and subroutines
+       u_e2_i3 >> u_e2_i2 >> u_e2_i1 >> u_e1_inner 
+       u_block >> u_fl >> u_e2_outer >> u_e1_outer 
+       popTempRegister >> popTempRegister >> popTempRegister
 
        let malloc = [(Just l_m_top, BRA l_m_bot),               -- 
                      (Nothing, ADDI registerSP $ Immediate 1),  
-                     (Nothing, EXCH registerRO registerSP),-- Pop return offset from stack
-                     (Just l_m_entry, SWAPBR registerRO),  -- Malloc1 entry/exit point
-                     (Nothing, NEG registerRO),            -- Restore return offset
-                     (Nothing, EXCH registerRO registerSP),-- Push return offset to stack
+                     (Nothing, EXCH registerRO registerSP)]     -- Pop return offset from stack
+                     ++ invertInstructions l_fl ++
+                    [(Just l_m_entry, SWAPBR registerRO),       -- Malloc1 entry/exit point
+                     (Nothing, NEG registerRO),                 -- Restore return offset
+                     (Nothing, EXCH registerRO registerSP),     -- Push return offset to stack
                      (Nothing, SUBI registerSP $ Immediate 1)]
+                    ++ l_fl
+                    ++ l_block 
                     ++ l_e1_outer                               -- Set r_e1 -> c_size < obj_size
                     ++ [(Nothing, XOR rt r_e1_outer)]           -- r_t = r_e1_o 
                     ++ invertInstructions l_e1_outer ++         -- Clear r_e1_o
                     [(Just l_o_test, BEQ rt registerZero l_o_test_f),
                      (Nothing, XORI rt $ Immediate 1),          -- S1_outer start
                      (Nothing, ADDI r_counter $ Immediate 1),   -- counter++
-                     (Nothing, RL r_csize $ Immediate 1),       -- call double(csize)
-                     (Nothing, BRA l_m_entry),                  -- call malloc1()
-                     (Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
+                     (Nothing, RL r_csize $ Immediate 1)]       -- call double(csize)
+                    ++ concatMap pushRegisterToStack tmpRegisterList
+                    ++
+                    [(Nothing, BRA l_m_entry)]                  -- call malloc1()
+                    ++ invertInstructions(concatMap pushRegisterToStack tmpRegisterList)
+                    ++
+                    [(Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
+                     (Nothing, SUBI r_counter $ Immediate 1),   -- counter++
                      (Nothing, XORI rt $ Immediate 1),          -- S1_outer end
                      (Just l_o_assert_t, BRA l_o_assert),
                      (Just l_o_test_f, BRA l_o_test)]
-                     -- S2_outer start
-                     ++ l_fl                                    -- Set r_fl -> address of free_list[counter]
-                     ++ l_block                                 -- Set r_block -> value of free_list[counter]
-                     ++ l_e1_inner                              -- Set r_e1_i -> r_block != 0
-                     ++ [(Nothing, XOR rt2 r_e1_inner)]         -- Set rt2 -> r_e1_i         
-                     ++ invertInstructions l_e1_inner           -- Clear r_e1_i
-                     ++ invertInstructions l_block
-                     ++ invertInstructions l_fl ++
-                    [(Just l_i_test, BEQ rt2 r_e1_inner l_i_test_f),
-                     (Nothing, XORI rt2 $ Immediate 1)]         -- S1_inner start
-                    ++ l_fl
-                    ++ l_block ++
-                    [--(Nothing, EXCH r_block r_fl),              -- Get address of block stored in current free list
+                     ++ l_e1_inner ++                           -- Set r_e1_i -> r_block != 0 (S2_OUTER)
+                    [(Nothing, XOR rt2 r_e1_inner)]             -- Set rt2 -> r_e1_i         
+                     ++ invertInstructions l_e1_inner ++        -- Clear r_e1_i
+                    [(Just l_i_test, BEQ rt2 registerZero l_i_test_f),
+                     (Nothing, XORI rt2 $ Immediate 1),         -- S1_inner start
                      (Nothing, ADD r_p r_block),                -- Set address of p to said block
                      (Nothing, SUB r_block r_p),                -- Clear r_block
                      (Nothing, EXCH r_tmp r_p),                 -- Load address of next block
-                     (Nothing, EXCH r_tmp r_fl),                -- Set address of next block as head of current free list
-                     (Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
-                     (Nothing, EXCH r_tmp r_p),                 -- Store address of vtable in newly alloc'd obj
+                     (Nothing, EXCH r_tmp r_fl),                -- Set address of next block as head of current free list                     
+                     (Nothing, XOR r_tmp r_p),                  -- Clear address of next block
                      (Nothing, XORI rt2 $ Immediate 1),         -- S1_inner end
                      (Just l_i_assert_t, BRA l_i_assert),
                      (Just l_i_test_f, BRA l_i_test),
-                     (Nothing, ADDI r_counter $ Immediate 1)]   -- S2_inner start
-                    ++
-                    [(Nothing, RL r_csize $ Immediate 1),       -- call double(csize)
-                     (Nothing, BRA l_m_entry),                  -- call malloc1()
-                     (Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
-                     (Nothing, SUBI r_counter $ Immediate 1)]   -- counter -= 1
-                    ++ l_block
-                     ++ l_fl ++ 
-                    [(Nothing, XOR r_tmp r_p),                  -- Copy current address of p
+                     (Nothing, ADDI r_counter $ Immediate 1),   -- S2_inner start
+                     (Nothing, RL r_csize $ Immediate 1)]       -- call double(csize)
+                    ++ concatMap pushRegisterToStack tmpRegisterList ++
+                    [(Nothing, BRA l_m_entry)]                  -- call malloc1()
+                    ++ invertInstructions(concatMap pushRegisterToStack tmpRegisterList) ++
+                    [(Nothing, RR r_csize $ Immediate 1),       -- uncall double(csize)
+                     (Nothing, SUBI r_counter $ Immediate 1),   -- counter -= 1
+                     (Nothing, XOR r_tmp r_p),                  -- Copy current address of p
                      (Nothing, EXCH r_tmp r_fl),                -- Store address in current free list
                      (Nothing, ADD r_p r_csize),                -- Set p to other half of the block we're splitting
                      (Just l_i_assert, BNE rt2 registerZero l_i_assert_t),
-                     (Nothing, XOR r_tmp r_p),
-                     (Nothing, SUB r_tmp r_csize)]    
-                     ++ l_e2_i                              -- set r_i_2 -> p - csize != free_list[counter]
-                     ++ [(Nothing, XOR rt2 r_e2_i)]          -- Set rt2 -> r_i_2
-                     ++ invertInstructions l_e2_i           -- Clear r_i_2
-                     ++ invertInstructions l_block
-                     ++ invertInstructions l_fl ++
-                     [(Nothing, ADD r_tmp r_csize),
-                      (Nothing, XOR r_tmp r_p),             -- S2_outer end 
+                     (Nothing, EXCH r_tmp r_fl),
+                     (Nothing, SUB r_p r_csize)]    
+                     ++ l_e2_i1                                 -- set r_e2_i1 <- p - csize != free_list[counter]
+                     ++ l_e2_i2                                 -- set r_e2_i2 <- free_list[counter] = 0
+                     ++ l_e2_i3                                 -- set r_e2_i3 <- r_e2_i1 || r_e2_i2
+                     ++ [(Nothing, XOR rt2 r_e2_i3)]            -- Set rt2 -> r_i_2
+                     ++ invertInstructions l_e2_i3              -- Clear r_i_2
+                     ++ invertInstructions l_e2_i2
+                     ++ invertInstructions l_e2_i1 ++
+                     [(Nothing, ADD r_p r_csize),
+                      (Nothing, EXCH r_tmp r_fl),               -- S2_outer end 
                       (Just l_o_assert, BNE rt registerZero l_o_assert_t)]         
-                     ++ l_e2_outer                            -- Set r_e1 -> c_size < obj_size
-                     ++ [(Nothing, XOR rt r_e2_outer)]        -- r_t = r_e1_o 
-                     ++ invertInstructions l_e2_outer         -- Clear r_e1_o
-                     ++ [(Just l_m_bot, BRA l_m_top)]         -- Go to top
-       return malloc
-
+                     ++ l_e2_outer                              -- Set r_e2 -> c_size < obj_size
+                     ++ [(Nothing, XOR rt r_e2_outer)]          -- r_t = r_e1_o 
+                     ++ invertInstructions l_e2_outer           -- Clear r_e1_o
+                     ++ [(Just l_m_bot, BRA l_m_top)]           -- Go to top       
+       return (l_m_entry, malloc)
+    where pushRegisterToStack r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
+    
 -- | Code generation for object construction
 cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectConstruction tp n =
@@ -539,27 +554,38 @@ cgObjectConstruction tp n =
        r_object_size <- tempRegister
        r_counter <- tempRegister
        r_csize <- tempRegister
-       l_m_entry <- getUniqueLabel "malloc_entry"
 
        let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
                    (Nothing, XOR r_counter registerZero),
                    (Nothing, ADDI r_object_size $ SizeMacro tp)]
 
-       malloc1 <- cgMalloc r_p r_object_size r_counter r_csize l_m_entry tp    
+       (malloc_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize tp    
        popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
-       return $ malloc ++ [(Nothing, BRA l_m_entry)] ++ malloc1 ++ invertInstructions malloc
+       
+       r_tmp <- tempRegister
+       let setVtable = [(Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
+                        (Nothing, EXCH r_tmp r_p)]
+       popTempRegister
+       return $ malloc ++ [(Nothing, BRA malloc_entry_label)] ++ malloc1 ++ invertInstructions malloc ++ setVtable
 
+   
 -- | Code generation for object destruction
 -- TODO: Implement
 cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectDestruction tp n =
-    do rv <- tempRegister
-       popTempRegister --rv
-       let create = [(Nothing, XOR rv registerSP),
-                     (Nothing, XORI rv $ AddressMacro $ "l_" ++ tp ++ "_vt"),
-                     (Nothing, EXCH rv registerSP),
-                     (Nothing, ADDI registerSP $ SizeMacro tp)]
-       return $ create ++ invertInstructions create
+    do (r_p, la, ua) <- loadVariableAddress n
+       r_object_size <- tempRegister
+       r_counter <- tempRegister
+       r_csize <- tempRegister
+   
+       let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
+                   (Nothing, XOR r_counter registerZero),
+                   (Nothing, ADDI r_object_size $ SizeMacro tp)]
+   
+       (free_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize tp
+       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
+       ua
+       return $ la ++ malloc ++ [(Nothing, BRA $ free_entry_label ++ "_i")] ++ invertInstructions malloc1 ++ invertInstructions malloc
 
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -666,7 +692,7 @@ cgProgram p =
                  (Nothing, START),
                  (Nothing, ADDI registerFLPs ProgramSize),    -- Init free list pointer list
                  (Nothing, XOR registerHP registerFLPs),      -- Init heap pointer
-                 (Nothing, ADDI registerHP FreeListsSize),    -- Init space for FLPs list TODO: Check for off by one her
+                 (Nothing, ADDI registerHP FreeListsSize),    -- Init space for FLPs list
                  (Nothing, XOR rb registerHP),                -- Store address of initial memory block in rb
                  (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
                  (Nothing, SUBI registerFLPs $ Immediate 1),  -- Index to last element of free lists
@@ -690,9 +716,9 @@ cgProgram p =
                  (Nothing, XOR registerThis registerSP),      -- Clear 'this'
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
                  (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
-                 (Nothing, SUBI registerFLPs $ Immediate 4),  -- Index to last element of free lists
+                 (Nothing, SUBI registerFLPs $ Immediate 1),  -- Index to last element of free lists
                  (Nothing, EXCH rb registerFLPs),             -- Remove address of first block in last element of free lists
-                 (Nothing, ADDI registerFLPs $ Immediate 4),  -- Index to end of free lists
+                 (Nothing, ADDI registerFLPs $ Immediate 1),  -- Index to end of free lists
                  (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
                  (Nothing, XOR rb registerHP),                -- clear rb
                  (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
