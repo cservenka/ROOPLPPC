@@ -135,24 +135,14 @@ loadVariableValue n =
 loadFreeListAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())        
 loadFreeListAddress index = tempRegister >>= \rt -> return (rt, [(Nothing, XOR rt registerFLPs), (Nothing, ADD rt index)], popTempRegister)
 
--- | Returns pointer to the block which is the head of the free list with given index
-loadFirstFreeListBlockAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
-loadFirstFreeListBlockAddress index =
-    do (r_free_list_address, la, ua) <- loadFreeListAddress index
-       r_block_address <- tempRegister
-       r_tmp <- tempRegister
-       let copyAddress = [(Nothing, EXCH r_tmp r_free_list_address), 
-                          (Nothing, XOR r_block_address r_tmp),
-                          (Nothing, EXCH r_tmp r_free_list_address)]
-       return (r_block_address, la ++ copyAddress, popTempRegister >> popTempRegister >> ua) 
-
+-- | Returns a copy of the pointer to the head of the free list at the given register
 loadHeadAtFreeList :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ()) 
-loadHeadAtFreeList ra =
+loadHeadAtFreeList rFreeList =
     do rv <- tempRegister
        rt <- tempRegister
-       let copyAddress = [(Nothing, EXCH rt ra), 
+       let copyAddress = [(Nothing, EXCH rt rFreeList), 
                           (Nothing, XOR rv rt),
-                          (Nothing, EXCH rt ra)]
+                          (Nothing, EXCH rt rFreeList)]
        return (rv, copyAddress, popTempRegister >> popTempRegister) 
 
 -- | Code generation for binary operators
@@ -322,11 +312,10 @@ cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Mayb
 cgObjectBlock tp n stmt =
     do rn <- pushRegister n
        rv <- tempRegister
-       label <- getUniqueLabel "object_block"
        popTempRegister --rv
        stmt' <- concat <$> mapM cgStatement stmt
        popRegister --rn
-       let create = [(Just label, XOR rn registerSP),
+       let create = [(Nothing, XOR rn registerSP),
                      (Nothing, XORI rv $ AddressMacro $ "l_" ++ tp ++ "_vt"),
                      (Nothing, EXCH rv registerSP),
                      (Nothing, SUBI registerSP $ SizeMacro tp)]
@@ -378,7 +367,7 @@ getType i = gets (symbolTable . saState) >>= \st ->
         (Just (MethodParameter (ObjectType tp) _)) -> return tp
         _ -> throwError $ "ICE: Invalid object variable index " ++ show i
 
--- | Load address for method (??)
+-- | Load the return offset for methods
 loadMethodAddress :: (SIdentifier, Register) -> MethodName -> CodeGenerator (Register, [(Maybe Label, MInstruction)])
 loadMethodAddress (o, ro) m =
     do rv <- tempRegister
@@ -439,10 +428,8 @@ cgObjectUncall o m args =
        let load = lo ++ [(Nothing, XOR rt ro)] ++ loadAddress ++ invertInstructions lo
        return $ load ++ call ++ invertInstructions load
 
-
--- TODO: Push temp regs to stack before branching. Pop afterwards       
-cgMalloc :: Register -> Register -> Register -> Register -> TypeName -> CodeGenerator (Label, [(Maybe Label, MInstruction)])
-cgMalloc r_p r_object_size r_counter r_csize tp =
+cgMalloc :: Register -> Register -> Register -> Register -> CodeGenerator (Label, [(Maybe Label, MInstruction)])
+cgMalloc r_p r_object_size r_counter r_csize =
     do l_o_test <- getUniqueLabel "o_test"
        l_o_assert_t <- getUniqueLabel "o_assert_true"
        l_o_test_f <- getUniqueLabel "o_test_false"
@@ -556,36 +543,39 @@ cgObjectConstruction tp n =
        r_csize <- tempRegister
 
        let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
-                   (Nothing, XOR r_counter registerZero),
-                   (Nothing, ADDI r_object_size $ SizeMacro tp)]
+                     (Nothing, XOR r_counter registerZero),
+                     (Nothing, ADDI r_object_size $ SizeMacro tp)]
 
-       (malloc_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize tp    
+       (malloc_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize    
        popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
        
        r_tmp <- tempRegister
        let setVtable = [(Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
                         (Nothing, EXCH r_tmp r_p)]
-       popTempRegister
+       popTempRegister -- r_tmp
        return $ malloc ++ [(Nothing, BRA malloc_entry_label)] ++ malloc1 ++ invertInstructions malloc ++ setVtable
 
    
 -- | Code generation for object destruction
--- TODO: Implement
 cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectDestruction tp n =
     do (r_p, la, ua) <- loadVariableAddress n
        r_object_size <- tempRegister
        r_counter <- tempRegister
        r_csize <- tempRegister
+       r_tmp <- tempRegister
+       let removeVtable = [(Nothing, EXCH r_tmp r_p),
+                           (Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt")]
+       popTempRegister -- r_tmp
    
-       let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
+       let free = [(Nothing, ADDI r_csize $ Immediate 2),
                    (Nothing, XOR r_counter registerZero),
                    (Nothing, ADDI r_object_size $ SizeMacro tp)]
    
-       (free_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize tp
+       (label, free1) <- cgMalloc r_p r_object_size r_counter r_csize
        popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
        ua
-       return $ la ++ malloc ++ [(Nothing, BRA $ free_entry_label ++ "_i")] ++ invertInstructions malloc1 ++ invertInstructions malloc
+       return $ la ++ removeVtable ++ free ++ [(Nothing, BRA $ label ++ "_i")] ++ invertInstructions free1 ++ invertInstructions free
 
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -715,15 +705,9 @@ cgProgram p =
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Clear rv
                  (Nothing, XOR registerThis registerSP),      -- Clear 'this'
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
-                 (Nothing, ADDI registerFLPs FreeListsSize),  -- Index to end of free lists
-                 (Nothing, SUBI registerFLPs $ Immediate 1),  -- Index to last element of free lists
-                 (Nothing, EXCH rb registerFLPs),             -- Remove address of first block in last element of free lists
-                 (Nothing, ADDI registerFLPs $ Immediate 1),  -- Index to end of free lists
-                 (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
-                 (Nothing, XOR rb registerHP),                -- clear rb
                  (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
                  (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
-                 (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists
+                 (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer
                  (Just "finish", FINISH)]
        return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ ms ++ mn
 
