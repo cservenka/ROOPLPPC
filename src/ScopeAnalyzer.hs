@@ -162,10 +162,9 @@ saStatement s =
             <*> mapM saLookup args
 
         (ObjectConstruction tp n) ->
-            do enterScope
-               n' <- saInsert (LocalVariable (ObjectType tp) n) n
+            do n' <- saInsert (LocalVariable (ObjectType tp) n) n
                return $ ObjectConstruction tp n'
-
+               
         (ObjectDestruction tp n) ->
             do n' <- saRemove (LocalVariable (ObjectType tp) n) n
                return $ ObjectDestruction tp n'
