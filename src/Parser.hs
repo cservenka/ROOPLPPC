@@ -16,7 +16,7 @@ import AST
 keywords :: [String]
 keywords =
     ["class",
-    --  "inherits", -- TODO: Implement
+     "inherits",
      "method",
      "call",
      "uncall",
@@ -261,6 +261,7 @@ classDeclaration =
     reserved "class"
     >> GCDecl
     <$> typeName
+    <*> optionMaybe (reserved "inherits" >> typeName)
     <*> many variableDeclaration
     <*> many1 methodDeclaration
 

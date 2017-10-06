@@ -49,7 +49,7 @@ initialState (GProg p) s =
         sizeTable = (classSize . caState) s,
         offsetTable = getOffsetTable s,
         programSize = genericLength p,
-        freeListsSize = 1,
+        freeListsSize = 3,
         stackOffset = 2048,
         initialMemoryBlockSize = 1024
         }

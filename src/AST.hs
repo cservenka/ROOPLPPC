@@ -78,7 +78,7 @@ data GMDecl m v = GMDecl m [GDecl v] [GStmt m v]
   deriving (Show, Eq)
 
 --Class: Name, fields, methods
-data GCDecl m v = GCDecl TypeName [GDecl v] [GMDecl m v]
+data GCDecl m v = GCDecl TypeName (Maybe TypeName)  [GDecl v] [GMDecl m v]
   deriving (Show, Eq)
 
 --Program

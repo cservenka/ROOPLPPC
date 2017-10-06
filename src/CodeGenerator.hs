@@ -307,7 +307,7 @@ cgLoop e1 s1 s2 e2 =
                 [(Just l_test, BNE rt registerZero l_exit)] ++ s2' ++
                 [(Just l_assert, BRA l_entry), (Just l_exit, BRA l_test), (Nothing, XORI rt $ Immediate 1)]
 
--- | Code generation for object blocks (Stack direction fixed)
+-- | Code generation for object blocks
 cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectBlock tp n stmt =
     do rn <- pushRegister n
@@ -321,7 +321,7 @@ cgObjectBlock tp n stmt =
                      (Nothing, SUBI registerSP $ SizeMacro tp)]
        return $ create ++ stmt' ++ invertInstructions create
 
--- | Code generation for local blocks (Stack direction fixed)
+-- | Code generation for local blocks
 cgLocalBlock :: SIdentifier -> SExpression -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
 cgLocalBlock n e1 stmt e2 =
     do rn <- pushRegister n
@@ -341,7 +341,7 @@ cgLocalBlock n e1 stmt e2 =
            clear = le2 ++ invertInstructions (create re2 rt2) ++ invertInstructions le2
        return $ load ++ stmt' ++ clear
 
--- | Code generation for calls (Stack direction fixed)
+-- | Code generation for calls
 cgCall :: [SIdentifier] -> [(Maybe Label, MInstruction)] -> Register -> CodeGenerator [(Maybe Label, MInstruction)]
 cgCall args jump this =
     do (ra, la, ua) <- unzip3 <$> mapM loadVariableAddress args
@@ -593,7 +593,7 @@ cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
 cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
 cgStatement Skip = return []
 
--- | Code generation for methods (Stack direction fixed)
+-- | Code generation for methods
 cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
 cgMethod (_, GMDecl m ps body) =
     do l <- getMethodLabel m
@@ -639,15 +639,14 @@ getMainClass = gets (mainClass . caState . saState) >>= \mc ->
         Nothing -> throwError "ICE: No main method defined"
 
 -- | Fetches the field of a given type name
--- FIXME: Inheritance
 getFields :: TypeName -> CodeGenerator [VariableDeclaration]
 getFields tp =
     do cs <- gets (classes . caState . saState)
        case lookup tp cs of
-           (Just (GCDecl _ fs _)) -> return fs
+           (Just (GCDecl _ _ fs _)) -> return fs
            Nothing -> throwError $ "ICE: Unknown class " ++ tp
 
--- | Code generation for output (Stack direction fixed)
+-- | Code generation for output
 cgOutput :: TypeName -> CodeGenerator ([(Maybe Label, MInstruction)], [(Maybe Label, MInstruction)])
 cgOutput tp =
     do mfs <- getFields tp
@@ -666,7 +665,7 @@ cgOutput tp =
                              SUBI registerSP $ Immediate o]
                  return $ zip (repeat Nothing) copy
 
--- | Generates code for the program entry point (Stack direction fixed)
+-- | Generates code for the program entry point
 cgProgram :: SProgram -> CodeGenerator PISA.MProgram
 cgProgram p =
     do vt <- cgVirtualTables
