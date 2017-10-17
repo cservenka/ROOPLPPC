@@ -255,6 +255,7 @@ loadForSwap n = gets (symbolTable . saState) >>= \st ->
         (Just ClassField {}) -> loadVariableValue n
         (Just (LocalVariable IntegerType _)) -> loadVariableValue n
         (Just (LocalVariable (ObjectType _) _)) -> loadVariableAddress n
+        (Just (LocalVariable (CopyType _) _)) -> loadVariableAddress n
         (Just (MethodParameter IntegerType _)) -> loadVariableValue n
         (Just (MethodParameter (ObjectType _) _)) -> loadVariableAddress n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
@@ -501,8 +502,7 @@ cgUnCopyReference tp n m =
                         (Nothing, EXCH rt rp),
                         (Nothing, SUBI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
-                        (Nothing, SUBI rp ReferenceCounterIndex)]
-       popRegister                 
+                        (Nothing, SUBI rp ReferenceCounterIndex)]              
        return $ la1 ++ la2 ++ reference       
 
 -- | Code generation for statements

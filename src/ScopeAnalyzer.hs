@@ -189,7 +189,7 @@ saStatement s =
         (UnCopyReference tp n m) ->
             do n' <- saLookup n
                m' <- saRemove (LocalVariable (CopyType tp) m) m
-               return $ CopyReference tp n' m'
+               return $ UnCopyReference tp n' m'
 
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
