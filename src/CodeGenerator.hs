@@ -427,22 +427,93 @@ cgObjectUncall o m args =
        popTempRegister >> uo
        let load = lo ++ [(Nothing, XOR rt ro)] ++ loadAddress ++ invertInstructions lo
        return $ load ++ call ++ invertInstructions load
-
-cgMalloc :: Register -> Register -> Register -> Register -> CodeGenerator (Label, [(Maybe Label, MInstruction)])
-cgMalloc r_p r_object_size r_counter r_csize =
-    do l_o_test <- getUniqueLabel "o_test"
-       l_o_assert_t <- getUniqueLabel "o_assert_true"
-       l_o_test_f <- getUniqueLabel "o_test_false"
-       l_o_assert <- getUniqueLabel "o_assert"
-       l_i_test <- getUniqueLabel "i_test"
-       l_i_assert_t <- getUniqueLabel "i_assert_true"
-       l_i_test_f <- getUniqueLabel "i_test_false"
-       l_i_assert <- getUniqueLabel "i_assert"
-       l_m_top <- getUniqueLabel "malloc_top"
-       l_m_bot <- getUniqueLabel "malloc_bot"
-       l_m_entry <- getUniqueLabel "m_entry"
     
-       -- Temp registers needed for malloc
+-- | Code generation for object construction
+-- | TODO: Init ref count 
+cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectConstruction tp n =
+    do rp <- pushRegister n
+       rt <- tempRegister
+       l  <- getUniqueLabel "obj_malloc"
+       popTempRegister
+       rs <- gets registerStack
+       let rr = (registerThis : map snd rs) \\ [rp, rt]
+           store = concatMap push rr
+           malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
+           lb = l ++ "_bot"
+           setVtable = [(Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
+                        (Just lb, EXCH rt rp)]
+       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions malloc ++ invertInstructions store ++ setVtable
+    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]   
+
+-- | Code generation for object destruction
+-- | TODO: Check ref count
+cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectDestruction tp n =
+    do (rp, la, ua) <- loadVariableAddress n
+       rt <- tempRegister
+       l  <- getUniqueLabel "obj_free"
+       popTempRegister >> ua
+       rs <- gets registerStack
+       let removeVtable = [(Just lb, EXCH rt rp),
+                        (Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt")]
+           rr = (registerThis : map snd rs) \\ [rp, rt]
+           store = concatMap push rr
+           free = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
+           lb = l ++ "_bot"
+       return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions free ++ invertInstructions store 
+    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
+
+-- | Code generation for statements
+cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
+cgStatement (Assign n modop e) = cgAssign n modop e
+cgStatement (Swap n1 n2) = cgSwap n1 n2
+cgStatement (Conditional e1 s1 s2 e2) = cgConditional e1 s1 s2 e2
+cgStatement (Loop e1 s1 s2 e2) = cgLoop e1 s1 s2 e2
+cgStatement (ObjectBlock tp n stmt) = cgObjectBlock tp n stmt
+cgStatement (LocalBlock n e1 stmt e2) = cgLocalBlock n e1 stmt e2
+cgStatement (LocalCall m args) = cgLocalCall m args
+cgStatement (LocalUncall m args) = cgLocalUncall m args
+cgStatement (ObjectCall o m args) = cgObjectCall o m args
+cgStatement (ObjectUncall o m args) = cgObjectUncall o m args
+cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
+cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
+cgStatement Skip = return []
+
+-- | Code generation for methods
+cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
+cgMethod (_, GMDecl m ps body) =
+    do l <- getMethodLabel m
+       rs <- addParameters
+       body' <- concat <$> mapM cgStatement body
+       clearParameters
+       let lt = l ++ "_top"
+           lb = l ++ "_bot"
+           mp = [(Just lt, BRA lb),
+                 (Nothing, ADDI registerSP $ Immediate 1),
+                 (Nothing, EXCH registerRO registerSP)]
+                 ++ concatMap pushParameter rs ++
+                [(Nothing, EXCH registerThis registerSP),
+                 (Nothing, SUBI registerSP $ Immediate 1),
+                 (Just l, SWAPBR registerRO),
+                 (Nothing, NEG registerRO),
+                 (Nothing, ADDI registerSP $ Immediate 1),
+                 (Nothing, EXCH registerThis registerSP)]
+                 ++ invertInstructions (concatMap pushParameter rs) ++
+                [(Nothing, EXCH registerRO registerSP),
+                 (Nothing, SUBI registerSP $ Immediate 1)]
+       return $ mp ++ body' ++ [(Just lb, BRA lt)]
+    where addParameters = mapM (pushRegister . (\(GDecl _ p) -> p)) ps
+          clearParameters = replicateM_ (length ps) popRegister
+          pushParameter r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
+
+cgMalloc1 :: CodeGenerator [(Maybe Label, MInstruction)]
+cgMalloc1 =
+    do -- Temp registers needed for malloc
+       r_p <- tempRegister -- Pointer to new obj
+       r_object_size <- tempRegister -- Object size
+       r_counter  <- tempRegister -- Free list index
+       r_csize  <- tempRegister -- Current cell size
        rt <- tempRegister
        rt2 <- tempRegister
        r_tmp <- tempRegister
@@ -462,9 +533,20 @@ cgMalloc r_p r_object_size r_counter r_csize =
        -- Update state after evaluating expressions and subroutines
        u_e2_i3 >> u_e2_i2 >> u_e2_i1 >> u_e1_inner 
        u_block >> u_fl >> u_e2_outer >> u_e1_outer 
-       popTempRegister >> popTempRegister >> popTempRegister
+       popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister
 
-       let malloc = [(Just l_m_top, BRA l_m_bot),               -- 
+       let l_o_test = "l_o_test"
+           l_o_assert_t = "l_o_assert_true"
+           l_o_test_f = "l_o_test_false"
+           l_o_assert = "l_o_assert"
+           l_i_test = "l_i_test"
+           l_i_assert_t = "l_i_assert_true"
+           l_i_test_f = "l_i_test_false"
+           l_i_assert = "l_i_assert"
+           l_m_top = "l_malloc1_top"
+           l_m_bot = "l_malloc1_bot"
+           l_m_entry = "l_malloc1"
+           malloc = [(Just l_m_top, BRA l_m_bot),               -- 
                      (Nothing, ADDI registerSP $ Immediate 1),  
                      (Nothing, EXCH registerRO registerSP)]     -- Pop return offset from stack
                      ++ invertInstructions l_fl ++
@@ -531,95 +613,59 @@ cgMalloc r_p r_object_size r_counter r_csize =
                      ++ [(Nothing, XOR rt r_e2_outer)]          -- r_t = r_e1_o 
                      ++ invertInstructions l_e2_outer           -- Clear r_e1_o
                      ++ [(Just l_m_bot, BRA l_m_top)]           -- Go to top       
-       return (l_m_entry, malloc)
+       return malloc
     where pushRegisterToStack r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
-    
--- | Code generation for object construction
-cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectConstruction tp n =
-    do r_p <- pushRegister n
-       r_object_size <- tempRegister
-       r_counter <- tempRegister
-       r_csize <- tempRegister
 
-       let malloc = [(Nothing, ADDI r_csize $ Immediate 2),
-                     (Nothing, XOR r_counter registerZero),
-                     (Nothing, ADDI r_object_size $ SizeMacro tp)]
-
-       (malloc_entry_label, malloc1) <- cgMalloc r_p r_object_size r_counter r_csize    
-       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
+cgMalloc :: CodeGenerator [(Maybe Label, MInstruction)]
+cgMalloc = 
+    do rp <- tempRegister -- Pointer to new obj
+       ros <- tempRegister -- Object size
+       rc  <- tempRegister -- Free list index
+       rs  <- tempRegister -- Current cell size
+       popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister
+       let malloc = [(Just "l_malloc_top", BRA "l_malloc_bot")]
+                    ++
+                    [(Just "l_malloc", SWAPBR registerRO),
+                     (Nothing, NEG registerRO),
+                     (Nothing, ADDI rs $ Immediate 2),
+                     (Nothing, XOR rc registerZero)]
+                    ++ concatMap pop [rp, ros]
+                    ++ push registerRO ++
+                    [(Nothing, BRA "l_malloc1")]
+                    ++ pop registerRO
+                    ++ concatMap push [ros, rp] ++
+                    [(Nothing, XOR rc registerZero),
+                     (Nothing, SUBI rs $ Immediate 2),
+                     (Just "l_malloc_bot", BRA "l_malloc_top")]        
+       return malloc    
+    where pop r = [(Nothing, ADDI registerSP $ Immediate 1), (Nothing, EXCH r registerSP)]
+          push r = invertInstructions (pop r)                            
        
-       r_tmp <- tempRegister
-       let setVtable = [(Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
-                        (Nothing, EXCH r_tmp r_p)]
-       popTempRegister -- r_tmp
-       return $ malloc ++ [(Nothing, BRA malloc_entry_label)] ++ malloc1 ++ invertInstructions malloc ++ setVtable
-
+cgFree :: CodeGenerator [(Maybe Label, MInstruction)]
+cgFree = 
+    do rp <- tempRegister -- Pointer to new obj
+       ros <- tempRegister -- Object size
+       rc  <- tempRegister -- Free list index
+       rs  <- tempRegister -- Current cell size
+       popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister
+       let malloc = [(Just "l_free_top", BRA "l_free_bot")]
+                    ++
+                    [(Just "l_free", SWAPBR registerRO),
+                     (Nothing, NEG registerRO),
+                     (Nothing, ADDI rs $ Immediate 2),
+                     (Nothing, XOR rc registerZero)]
+                    ++ concatMap pop [rp, ros]
+                    ++ push registerRO ++
+                    [(Nothing, RBRA "l_malloc1")]
+                    ++ pop registerRO
+                    ++ concatMap push [ros, rp] ++
+                    [(Nothing, XOR rc registerZero),
+                     (Nothing, SUBI rs $ Immediate 2),
+                     (Just "l_free_bot", BRA "l_free_top")]        
+       return malloc    
+    where pop r = [(Nothing, ADDI registerSP $ Immediate 1), (Nothing, EXCH r registerSP)]
+          push r = invertInstructions (pop r)
    
--- | Code generation for object destruction
-cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectDestruction tp n =
-    do (r_p, la, ua) <- loadVariableAddress n
-       r_object_size <- tempRegister
-       r_counter <- tempRegister
-       r_csize <- tempRegister
-       r_tmp <- tempRegister
-       let removeVtable = [(Nothing, EXCH r_tmp r_p),
-                           (Nothing, XORI r_tmp $ AddressMacro $ "l_" ++ tp ++ "_vt")]
-       popTempRegister -- r_tmp
-   
-       let free = [(Nothing, ADDI r_csize $ Immediate 2),
-                   (Nothing, XOR r_counter registerZero),
-                   (Nothing, ADDI r_object_size $ SizeMacro tp)]
-   
-       (label, free1) <- cgMalloc r_p r_object_size r_counter r_csize
-       popTempRegister >> popTempRegister >> popTempRegister -- r_csize, r_counter, r_object_size
-       ua
-       return $ la ++ removeVtable ++ free ++ [(Nothing, BRA $ label ++ "_i")] ++ invertInstructions free1 ++ invertInstructions free
-
--- | Code generation for statements
-cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
-cgStatement (Assign n modop e) = cgAssign n modop e
-cgStatement (Swap n1 n2) = cgSwap n1 n2
-cgStatement (Conditional e1 s1 s2 e2) = cgConditional e1 s1 s2 e2
-cgStatement (Loop e1 s1 s2 e2) = cgLoop e1 s1 s2 e2
-cgStatement (ObjectBlock tp n stmt) = cgObjectBlock tp n stmt
-cgStatement (LocalBlock n e1 stmt e2) = cgLocalBlock n e1 stmt e2
-cgStatement (LocalCall m args) = cgLocalCall m args
-cgStatement (LocalUncall m args) = cgLocalUncall m args
-cgStatement (ObjectCall o m args) = cgObjectCall o m args
-cgStatement (ObjectUncall o m args) = cgObjectUncall o m args
-cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
-cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
-cgStatement Skip = return []
-
--- | Code generation for methods
-cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
-cgMethod (_, GMDecl m ps body) =
-    do l <- getMethodLabel m
-       rs <- addParameters
-       body' <- concat <$> mapM cgStatement body
-       clearParameters
-       let lt = l ++ "_top"
-           lb = l ++ "_bot"
-           mp = [(Just lt, BRA lb),
-                 (Nothing, ADDI registerSP $ Immediate 1),
-                 (Nothing, EXCH registerRO registerSP)]
-                 ++ concatMap pushParameter rs ++
-                [(Nothing, EXCH registerThis registerSP),
-                 (Nothing, SUBI registerSP $ Immediate 1),
-                 (Just l, SWAPBR registerRO),
-                 (Nothing, NEG registerRO),
-                 (Nothing, ADDI registerSP $ Immediate 1),
-                 (Nothing, EXCH registerThis registerSP)]
-                 ++ invertInstructions (concatMap pushParameter rs) ++
-                [(Nothing, EXCH registerRO registerSP),
-                 (Nothing, SUBI registerSP $ Immediate 1)]
-       return $ mp ++ body' ++ [(Just lb, BRA lt)]
-    where addParameters = mapM (pushRegister . (\(GDecl _ p) -> p)) ps
-          clearParameters = replicateM_ (length ps) popRegister
-          pushParameter r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
-
 -- | Code generation for virtual tables
 cgVirtualTables :: CodeGenerator [(Maybe Label, MInstruction)]
 cgVirtualTables = concat <$> (gets (virtualTables . saState) >>= mapM vtInstructions)
@@ -647,6 +693,7 @@ getFields tp =
            Nothing -> throwError $ "ICE: Unknown class " ++ tp
 
 -- | Code generation for output
+-- | FIXME: Output
 cgOutput :: TypeName -> CodeGenerator ([(Maybe Label, MInstruction)], [(Maybe Label, MInstruction)])
 cgOutput tp =
     do mfs <- getFields tp
@@ -669,6 +716,9 @@ cgOutput tp =
 cgProgram :: SProgram -> CodeGenerator PISA.MProgram
 cgProgram p =
     do vt <- cgVirtualTables
+       malloc <- cgMalloc
+       free   <- cgFree
+       malloc1 <- cgMalloc1
        rv <- tempRegister -- V table register
        rb <- tempRegister -- Memory block register
        popTempRegister >> popTempRegister
@@ -708,7 +758,7 @@ cgProgram p =
                  (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
                  (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer
                  (Just "finish", FINISH)]
-       return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ ms ++ mn
+       return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ malloc ++ free ++ malloc1 ++ ms ++ mn
 
 
 -- | Generates code for a program
