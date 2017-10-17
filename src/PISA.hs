@@ -63,6 +63,7 @@ data Macro = Immediate Integer
            | FreeListsSize
            | StackOffset
            | InitialMemoryBlockSize
+           | ReferenceCounterIndex
     deriving (Show, Eq)
 
 type MInstruction = GInstr Macro

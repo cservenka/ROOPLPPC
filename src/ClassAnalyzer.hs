@@ -131,7 +131,7 @@ setSuperClasses (GCDecl n _ _ _) = gets subClasses >>= \sc ->
 -- | Returns the nearest 2^n as size for given class
 getClassSize :: ClassDeclaration -> ClassAnalyzer Size
 getClassSize (GCDecl _ Nothing fs _) = 
-    return $ 2 ^ (ceiling :: Double -> Integer) (logBase 2 (1 + genericLength fs))
+    return $ 2 ^ (ceiling :: Double -> Integer) (logBase 2 (2 + genericLength fs))
 getClassSize (GCDecl _ (Just b) fs _) = 
     getClass b >>= getClassSize >>= \sz -> 
         return $ 2 ^ (ceiling :: Double -> Integer) (logBase 2 (fromIntegral $ sz + genericLength fs))
@@ -175,7 +175,7 @@ caProgram (GProg p) = do
     rootClasses = filter noBase p
     noBase (GCDecl _ Nothing _ _) = True
     noBase _ = False
-
+ 
 -- | Performs Class Analysis on the program
 classAnalysis :: Program -> Except String (Program, CAState)
 classAnalysis p = runStateT (runCA $ caProgram p) initialState

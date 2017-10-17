@@ -442,7 +442,11 @@ cgObjectConstruction tp n =
            malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
            lb = l ++ "_bot"
            setVtable = [(Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
-                        (Just lb, EXCH rt rp)]
+                        (Nothing, EXCH rt rp),
+                        (Nothing, ADDI rp ReferenceCounterIndex),
+                        (Nothing, XORI rt $ Immediate 1),
+                        (Nothing, EXCH rt rp),
+                        (Just lb, SUBI rp ReferenceCounterIndex)]
        return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions malloc ++ invertInstructions store ++ setVtable
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]   
 
@@ -455,14 +459,51 @@ cgObjectDestruction tp n =
        l  <- getUniqueLabel "obj_free"
        popTempRegister >> ua
        rs <- gets registerStack
-       let removeVtable = [(Just lb, EXCH rt rp),
-                        (Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt")]
+       let removeVtable = [(Just lt, EXCH rt rp),
+                           (Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"),
+                           (Nothing, ADDI rp ReferenceCounterIndex),
+                           (Nothing, EXCH rt rp),
+                           (Nothing, XORI rt $ Immediate 1),
+                           (Nothing, SUBI rp ReferenceCounterIndex)]
            rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
            free = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
-           lb = l ++ "_bot"
+           lt = l ++ "_top"
        return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions free ++ invertInstructions store 
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
+
+-- | TODO: Sanity checks 
+cgCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgCopyReference tp n m = 
+    do rcp <- pushRegister m
+       (rp, la, ua) <- loadVariableAddress n
+       rt <- tempRegister
+       ua >> popTempRegister
+       l <- getUniqueLabel "copy"
+       let reference = [(Just l, XOR rcp rp),
+                        (Nothing, ADDI rp ReferenceCounterIndex),
+                        (Nothing, EXCH rt rp),
+                        (Nothing, ADDI rt $ Immediate 1),
+                        (Nothing, EXCH rt rp),
+                        (Nothing, SUBI rp ReferenceCounterIndex)]
+       return $ la ++ reference 
+
+-- | -- | TODO: Sanity checks       
+cgUnCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgUnCopyReference tp n m = 
+    do (rcp, la1, ua1) <- loadVariableAddress m
+       (rp, la2, ua2) <- loadVariableAddress n
+       rt <- tempRegister
+       l <- getUniqueLabel "uncopy"
+       ua1 >> ua2 >> popTempRegister
+       let reference = [(Just l, XOR rcp rp),
+                        (Nothing, ADDI rp ReferenceCounterIndex),
+                        (Nothing, EXCH rt rp),
+                        (Nothing, SUBI rt $ Immediate 1),
+                        (Nothing, EXCH rt rp),
+                        (Nothing, SUBI rp ReferenceCounterIndex)]
+       popRegister                 
+       return $ la1 ++ la2 ++ reference       
 
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -479,6 +520,8 @@ cgStatement (ObjectUncall o m args) = cgObjectUncall o m args
 cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
 cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
 cgStatement Skip = return []
+cgStatement (CopyReference tp n m) = cgCopyReference tp n m
+cgStatement (UnCopyReference tp n m)  = cgUnCopyReference tp n m
 
 -- | Code generation for methods
 cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]

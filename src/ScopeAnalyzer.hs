@@ -164,7 +164,8 @@ saStatement s =
         (ObjectConstruction tp n) ->
             do n' <- saInsert (LocalVariable (ObjectType tp) n) n
                return $ ObjectConstruction tp n'
-               
+        
+        -- TODO: Ref counting, ensure not owner to anyone
         (ObjectDestruction tp n) ->
             do n' <- saRemove (LocalVariable (ObjectType tp) n) n
                return $ ObjectDestruction tp n'
@@ -176,7 +177,19 @@ saStatement s =
                leaveScope
                return $ ObjectBlock tp n' stmt'
 
-        Skip -> pure Skip               
+        Skip -> pure Skip
+        
+        -- TODO: add ownership
+        (CopyReference tp n m) ->
+            do n' <- saLookup n
+               m' <- saInsert (LocalVariable (CopyType tp) m) m
+               return $ CopyReference tp n' m'
+        
+        -- TODO: Remove ownership 
+        (UnCopyReference tp n m) ->
+            do n' <- saLookup n
+               m' <- saRemove (LocalVariable (CopyType tp) m) m
+               return $ CopyReference tp n' m'
 
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
@@ -255,7 +268,7 @@ saClass offset pids (GCDecl c _ fs ms) =
 
 -- | Analyses Programs
 saProgram :: Program -> ScopeAnalyzer SProgram
-saProgram (GProg cs) = concat <$> mapM (saClass 1 []) cs
+saProgram (GProg cs) = concat <$> mapM (saClass 2 []) cs
 
 -- | Performs scope analysis on the entire program 
 scopeAnalysis :: (Program, CAState) -> Except String (SProgram, SAState)

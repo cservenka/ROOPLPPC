@@ -9,6 +9,7 @@ type MethodName = String
 
 data DataType = IntegerType
               | ObjectType TypeName
+              | CopyType TypeName
               | NilType
   deriving (Show)
 
@@ -19,6 +20,8 @@ instance Eq DataType where
   NilType == (ObjectType _) = True
   (ObjectType _) == NilType = True
   (ObjectType t1) == (ObjectType t2) = t1 == t2
+  (CopyType t1) == (ObjectType t2) = t1 == t2
+  (ObjectType t1) == (CopyType t2) = t1 == t2
   _ == _ = False
 
 -- Binary Operators
@@ -66,6 +69,8 @@ data GStmt m v = Assign v ModOp (GExpr v)
                | ObjectUncall v MethodName [v]
                | ObjectConstruction TypeName v
                | ObjectDestruction TypeName v
+               | CopyReference TypeName v v
+               | UnCopyReference TypeName v v
                | Skip
   deriving (Show, Eq)
 

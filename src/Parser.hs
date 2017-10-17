@@ -36,7 +36,9 @@ keywords =
      "local",
      "delocal",
      "new",
-     "delete"]
+     "delete",
+     "copy",
+     "uncopy"]
 
 --Operator precedence identical to C
 operatorTable :: [[(String, BinOp)]]
@@ -223,6 +225,22 @@ objectBlock =
 skip :: Parser Statement
 skip = Skip <$ reserved "skip"
 
+copyReference :: Parser Statement
+copyReference = 
+    reserved "copy"
+    >> CopyReference
+    <$> typeName
+    <*> identifier
+    <*> identifier 
+
+unCopyReference :: Parser Statement
+unCopyReference = 
+    reserved "uncopy"
+    >> UnCopyReference
+    <$> typeName
+    <*> identifier
+    <*> identifier     
+
 statement :: Parser Statement
 statement = try assign
         <|> swap
@@ -237,6 +255,8 @@ statement = try assign
         <|> objectConstruction
         <|> objectDestruction
         <|> skip
+        <|> copyReference
+        <|> unCopyReference
 
 block :: Parser [Statement]
 block = many1 statement
