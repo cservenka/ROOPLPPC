@@ -22,6 +22,7 @@ executable ROOPLPPC
                       , PISA
                       , Parser
                       , ScopeAnalyzer
+                      , TypeChecker
   -- other-extensions:
   build-depends:        base >= 4.7 && < 5
                       , text

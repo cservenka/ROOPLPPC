@@ -22,6 +22,7 @@ instance Eq DataType where
   (ObjectType t1) == (ObjectType t2) = t1 == t2
   (CopyType t1) == (ObjectType t2) = t1 == t2
   (ObjectType t1) == (CopyType t2) = t1 == t2
+  (CopyType t1) == (CopyType t2) = t1 == t2
   _ == _ = False
 
 -- Binary Operators

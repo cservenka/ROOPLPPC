@@ -6,6 +6,7 @@ import Parser
 import ClassAnalyzer
 -- import VectorAnalyzer
 import ScopeAnalyzer
+import TypeChecker
 import CodeGenerator
 import MacroExpander
 
@@ -31,5 +32,6 @@ compileProgram s =
     >>= classAnalysis
 --     >>= vectorAnalysis
     >>= scopeAnalysis
+    >>= typeCheck
     >>= generatePISA
     >>= expandMacros
