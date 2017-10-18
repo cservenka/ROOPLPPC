@@ -29,6 +29,7 @@ data CGState =
         registerIndex :: Integer,
         labelTable :: [(SIdentifier, Label)],
         registerStack :: [(SIdentifier, Register)],
+        freedRegisters :: [Register],
         saState :: SAState
     } deriving (Show, Eq)
 
@@ -37,7 +38,7 @@ newtype CodeGenerator a = CodeGenerator { runCG :: StateT CGState (Except String
 
 
 initialState :: SAState -> CGState
-initialState s = CGState { labelIndex = 0, registerIndex = 6, labelTable = [], registerStack = [], saState = s }
+initialState s = CGState { labelIndex = 0, registerIndex = 6, labelTable = [], registerStack = [], freedRegisters = [], saState = s }
 
 -- | Register containing 0
 registerZero :: Register
@@ -64,13 +65,19 @@ registerHP :: Register
 registerHP = Reg 5
 
 pushRegister :: SIdentifier -> CodeGenerator Register
-pushRegister i =
-    do ri <- gets registerIndex
-       modify $ \s -> s { registerIndex = 1 + ri, registerStack = (i, Reg ri) : registerStack s }
-       return $ Reg ri
+pushRegister i = gets freedRegisters >>= \fr ->
+    case fr of
+        (x:xs) -> do modify $ \s -> trace ("In freedReg case!! i = "++ show i ++ " x = " ++ show x ++ " xs: " ++ show xs) s { registerStack = (i, x) : registerStack s, freedRegisters = xs}  
+                     return x
+        [] -> do ri <- gets registerIndex
+                 modify $ \s -> s { registerIndex = 1 + ri, registerStack = (i, Reg ri) : registerStack s }
+                 return $ Reg ri       
 
 popRegister :: CodeGenerator ()
 popRegister = modify $ \s -> s { registerIndex = (-1) + registerIndex s, registerStack = drop 1 $ registerStack s }
+
+removeRegister :: (SIdentifier, Register) -> CodeGenerator ()
+removeRegister (i, r) = modify $ \s -> trace ("Setting free reg..." ++ show r) s { registerStack = filter (/= (i, r)) (registerStack s), freedRegisters = r : freedRegisters s } 
 
 tempRegister :: CodeGenerator Register
 tempRegister =
@@ -470,6 +477,7 @@ cgObjectDestruction tp n =
            store = concatMap push rr
            free = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
            lt = l ++ "_top"
+       removeRegister (n, rp)   
        return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions free ++ invertInstructions store 
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
 
@@ -502,7 +510,8 @@ cgUnCopyReference tp n m =
                         (Nothing, EXCH rt rp),
                         (Nothing, SUBI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
-                        (Nothing, SUBI rp ReferenceCounterIndex)]              
+                        (Nothing, SUBI rp ReferenceCounterIndex)]    
+       removeRegister (m, rcp)                           
        return $ la1 ++ la2 ++ reference       
 
 -- | Code generation for statements
