@@ -447,7 +447,7 @@ cgObjectConstruction tp n =
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
-           malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
+           malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
            lb = l ++ "_bot"
            setVtable = [(Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
                         (Nothing, EXCH rt rp),
@@ -475,7 +475,7 @@ cgObjectDestruction tp n =
                            (Nothing, SUBI rp ReferenceCounterIndex)]
            rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
-           free = [(Just l, ADDI rt $ SizeMacro tp)] ++ concatMap push [rt, rp]
+           free = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
            lt = l ++ "_top"
        removeRegister (n, rp)   
        return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions free ++ invertInstructions store 
