@@ -89,6 +89,42 @@ saLookup n = gets scopeStack >>= \ss ->
         Nothing -> throwError $ "Undeclared symbol: " ++ n
         Just i -> return i
 
+-- | Inserts a new owner into the ownership table        
+saInsertOwner :: SIdentifier -> ScopeAnalyzer ()
+saInsertOwner n = gets ownerShipTable >>= \ost -> 
+    case lookup n ost of
+        Nothing -> modify $ \s -> s { ownerShipTable = (n, []) : ownerShipTable s }
+        Just _  -> throwError $ "ICE: " ++ show n ++ " already exists in ownership table"
+
+-- | Removes an existing owner from the ownership table        
+saRemoveOwner :: Identifier -> ScopeAnalyzer ()
+saRemoveOwner n = gets ownerShipTable >>= \ost ->
+    do n' <- saLookup n
+       case lookup n' ost of
+          Nothing -> throwError $ "Removal of unknown reference owner: " ++ n
+          Just xs -> case length xs of
+                        0 -> modify $ \s -> s { ownerShipTable = filter (\(x, _) -> n' /= x) (ownerShipTable s) }
+                        _ -> throwError $ show n ++ " cannot be deallocated as references to it still exists"
+          
+-- | Inserts ownership over m for n    
+saInsertOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
+saInsertOwnerShip n m = gets ownerShipTable >>= \ost ->
+    do n' <- saLookup n
+       m' <- saLookup m
+       case lookup n' ost of
+           Nothing -> throwError $ "Error: " ++ show n ++ " cannot be reference"
+           Just xs -> modify $ \s -> s { ownerShipTable = (n', m':xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }    
+
+-- | Removes ownership over m from n
+saRemoveOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
+saRemoveOwnerShip n m = gets ownerShipTable >>= \ost ->
+    do n' <- saLookup n
+       m' <- saLookup m
+       case lookup n' ost of
+           Nothing -> throwError $ "Error: Unknown reference owner: " ++ show n
+           Just xs -> do when (m' `notElem` xs) (throwError $ "Error: " ++ show m ++ " is not a reference of " ++ show n)
+                         modify $ \s -> s { ownerShipTable = (n', filter (/= m') xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }        
+
 -- | Scope Analyses Expressions
 saExpression :: Expression -> ScopeAnalyzer SExpression
 saExpression (Constant v) = pure $ Constant v
@@ -98,33 +134,6 @@ saExpression (Binary binop e1 e2) =
     Binary binop
     <$> saExpression e1
     <*> saExpression e2
-
-saInsertOwner :: SIdentifier -> ScopeAnalyzer ()
-saInsertOwner n = gets ownerShipTable >>= \ost -> 
-    case lookup n ost of
-        Nothing -> modify $ \s -> s { ownerShipTable = (n, []) : ownerShipTable s }
-        Just _  -> throwError $ "ICE: " ++ show n ++ " already exists in ownership table"
-
--- saRemoveOwner :: SIdentifier -> ScopeAnalyzer ()
--- saRemoveOwner n = gets ownerShipTable >>= \ost ->
---     case lookup n         
-        
-saInsertOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
-saInsertOwnerShip n m = gets ownerShipTable >>= \ost ->
-    do n' <- saLookup n
-       m' <- saLookup m
-       case lookup n' ost of
-           Nothing -> throwError $ "Error: " ++ show n ++ " cannot be reference"
-           Just xs -> modify $ \s -> s { ownerShipTable = (n', m':xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }    
-
-saRemoveOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
-saRemoveOwnerShip n m = gets ownerShipTable >>= \ost ->
-    do n' <- saLookup n
-       m' <- saLookup m
-       case lookup n' ost of
-           Nothing -> throwError $ "Error: Unknown reference owner: " ++ show n
-           Just xs -> do when (m' `notElem` xs) (throwError $ "Error: " ++ show m ++ " is not a reference of " ++ show n)
-                         modify $ \s -> s { ownerShipTable = (n', filter (/= m') xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }
 
 -- | Scope Analyses Statements
 saStatement :: Statement -> ScopeAnalyzer SStatement
@@ -194,9 +203,9 @@ saStatement s =
                saInsertOwner n'
                return $ ObjectConstruction tp n'
         
-        -- TODO: Ref counting, ensure not owner to anyone
         (ObjectDestruction tp n) ->
-            do n' <- saRemove (LocalVariable (ObjectType tp) n) n
+            do saRemoveOwner n
+               n' <- saRemove (LocalVariable (ObjectType tp) n) n
                return $ ObjectDestruction tp n'
 
         (ObjectBlock tp n stmt) ->
