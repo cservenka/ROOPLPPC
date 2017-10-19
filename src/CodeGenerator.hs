@@ -67,7 +67,7 @@ registerHP = Reg 5
 pushRegister :: SIdentifier -> CodeGenerator Register
 pushRegister i = gets freedRegisters >>= \fr ->
     case fr of
-        (x:xs) -> do modify $ \s -> trace ("In freedReg case!! i = "++ show i ++ " x = " ++ show x ++ " xs: " ++ show xs) s { registerStack = (i, x) : registerStack s, freedRegisters = xs}  
+        (x:xs) -> do modify $ \s -> s { registerStack = (i, x) : registerStack s, freedRegisters = xs}  
                      return x
         [] -> do ri <- gets registerIndex
                  modify $ \s -> s { registerIndex = 1 + ri, registerStack = (i, Reg ri) : registerStack s }
@@ -77,7 +77,7 @@ popRegister :: CodeGenerator ()
 popRegister = modify $ \s -> s { registerIndex = (-1) + registerIndex s, registerStack = drop 1 $ registerStack s }
 
 removeRegister :: (SIdentifier, Register) -> CodeGenerator ()
-removeRegister (i, r) = modify $ \s -> trace ("Setting free reg..." ++ show r) s { registerStack = filter (/= (i, r)) (registerStack s), freedRegisters = r : freedRegisters s } 
+removeRegister (i, r) = modify $ \s -> s { registerStack = filter (/= (i, r)) (registerStack s), freedRegisters = r : freedRegisters s } 
 
 tempRegister :: CodeGenerator Register
 tempRegister =
@@ -92,7 +92,7 @@ lookupRegister :: SIdentifier -> CodeGenerator Register
 lookupRegister i = gets registerStack >>= \rs ->
     case lookup i rs of
         Nothing -> throwError $ "ICE: No register reserved for index " ++ show i
-        (Just r) -> traceShow rs return r
+        (Just r) -> return r
 
 -- | Returns the method name of a valid method identifier
 getMethodName :: SIdentifier -> CodeGenerator MethodName
