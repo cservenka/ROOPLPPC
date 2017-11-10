@@ -51,5 +51,3 @@ class Program
         call linkedlist::prepend(head)      // Set new head of the list     
 
         call linkedList::length(listLength) // Get length of linked list            
-
-
