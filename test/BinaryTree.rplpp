@@ -1,0 +1,81 @@
+class Node
+    Node left
+    Node right
+    int value
+
+    method setValue(int y)
+        value ^= y 
+
+    method insertNode(Node node, int value)
+        if value < value then                       // Determine if we insert left or right
+            if left != nil then
+                call left::insertNode(node, value)  // If current node has left, continue iterating
+            else
+                left <=> node                       // Else, store new node here
+            fi left != nil
+        else
+            if right != nil then
+                call right::insertNode(node, value) // If current node has, continue searching
+            else
+                right <=> node                      // Else, store new node here
+            fi right != nil
+        fi value < value
+
+    method getSum(int result)
+        result += value                  // Add the value of this node to the sum                         
+        if left != nil then
+            call left::getSum(result)   // If we have a left child, follow that path
+        else skip                        // Else, skip
+        fi left != nil
+
+        if right != nil then
+            call right::getSum(result)  // If we have a right child, follow that path
+        else skip                       // Else, skip
+         fi right != nil
+
+    method mirror()
+        left <=> right                  // Swap left and right children
+
+        if left != nil then
+            call left::mirror()         // Recursively swap children if left != nil
+        else skip
+        fi left != nil
+
+        if right != nil then
+            call right::mirror()        // Recursively swap children if right != nil
+        else skip
+        fi right != nil                 
+
+class Tree
+    Node root
+
+    method insertNode(Node node, int value)
+        if root != nil then
+            call root::insertNode(node, value)
+        else
+            node <=> root
+        fi root != nil
+
+    method sum(int result)
+        call root::getSum(result)
+
+    method mirror()
+        call root::mirror()
+
+class Program
+    int sumResult
+
+    method main()
+        new Tree tree
+
+        from x = 0 do
+            skip
+        loop
+            new Node node
+            call node::setValue(x)
+            call tree::insertNode(node, x)
+            x += 1
+        until x = 10
+
+        call tree::sum(sumResult)
+        call tree::mirror()

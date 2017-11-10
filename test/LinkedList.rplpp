@@ -1,0 +1,55 @@
+class Cell
+    Cell next
+    int data
+
+    method constructor(int value)
+        data ^= value     
+
+    method append(Cell cell)
+        if next != nil then         // If current cell already has a next node, continue
+            call next::append(cell)
+        else
+            next <=> cell           // Else, insert new cell as next of current cell
+        fi next != nil
+               
+class LinkedList
+    Cell head
+    int length
+
+    method append(Cell cell)
+        call head::append(cell)     // Iterate list until we reach the end, then insert the node
+        length += 1 
+
+    method prepend(Cell cell)
+        call cell::append(head)     // Set cell.next = head. head = nil after execution
+        cell <=> head               // Set head = cell. Cell is nil after execution
+        length += 1
+
+    method length(int result)
+        result ^= length    
+
+class Program
+    int sumResult
+    int listLength
+
+    method main()
+        new LinkedList linkedList           // Init new linked linkedList
+
+        from x = 0 do
+            skip
+        loop
+            new Cell cell                   // Instantiate new cell
+            call cell::constructor(x)       // Set value of cell
+            call linkedList::append(cell)   // Append it to the linkedList
+            x += 1                      
+        until x = 10
+
+        call linkedList::sum(sumResult)     // Set sum of linkedList in sumResult
+
+        new Cell head
+        call head::constructor(x)           // Init new head of list
+        call linkedlist::prepend(head)      // Set new head of the list     
+
+        call linkedList::length(listLength) // Get length of linked list            
+
+
