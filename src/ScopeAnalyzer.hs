@@ -201,7 +201,7 @@ saStatement s =
             <*> mapM saLookup args
 
         (ObjectConstruction tp n) ->
-            do n' <- saInsert (LocalVariable (ObjectType tp) n) n
+            do n' <- saLookup n
                saInsertOwner n'
                return $ ObjectConstruction tp n'
         
