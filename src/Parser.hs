@@ -200,14 +200,14 @@ objectDestruction =
 localBlock :: Parser Statement
 localBlock =
     reserved "local"
-    >> reserved "int"
     >> LocalBlock
-    <$> identifier
+    <$> typeName
+    <*> identifier
     <* symbol "="
     <*> expression
     <*> block
     <* reserved "delocal"
-    <* reserved "int"
+    <* typeName
     <* identifier
     <* symbol "="
     <*> expression

@@ -63,7 +63,7 @@ data GStmt m v = Assign v ModOp (GExpr v)
                | Conditional (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
                | Loop (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
                | ObjectBlock TypeName v [GStmt m v]
-               | LocalBlock v (GExpr v) [GStmt m v] (GExpr v)
+               | LocalBlock TypeName v (GExpr v) [GStmt m v] (GExpr v)
                | LocalCall m [v]
                | LocalUncall m [v]
                | ObjectCall v MethodName [v]

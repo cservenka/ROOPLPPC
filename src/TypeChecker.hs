@@ -106,9 +106,11 @@ tcStatement s =
         (ObjectBlock _ _ stmt) ->
             mapM_ tcStatement stmt
 
-        (LocalBlock n e1 stmt e2) ->
+        (LocalBlock tp n e1 stmt e2) ->
             getType n
-            >>= expectType IntegerType
+            >>= case tp of
+                  "int" -> expectType IntegerType
+                  _     -> expectType (ObjectType tp)
             >> tcExpression e1
             >>= expectType IntegerType
             >> mapM_ tcStatement stmt

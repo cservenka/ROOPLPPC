@@ -165,14 +165,16 @@ saStatement s =
             <*> mapM saStatement s2
             <*> saExpression e2    
 
-        (LocalBlock n e1 stmt e2) ->
+        (LocalBlock tp n e1 stmt e2) ->
             do e1' <- saExpression e1
                enterScope
-               n' <- saInsert (LocalVariable IntegerType n) n
+               n' <- case tp of
+                       "int" -> saInsert (LocalVariable IntegerType n) n
+                       _     -> saInsert (LocalVariable (ObjectType tp) n) n
                stmt' <- mapM saStatement stmt
                leaveScope
                e2' <- saExpression e2
-               return $ LocalBlock n' e1' stmt' e2'
+               return $ LocalBlock tp n' e1' stmt' e2'
     
         (LocalCall m args) ->
             LocalCall
