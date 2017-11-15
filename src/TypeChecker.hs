@@ -112,10 +112,14 @@ tcStatement s =
                   "int" -> expectType IntegerType
                   _     -> expectType (ObjectType tp)
             >> tcExpression e1
-            >>= expectType IntegerType
+            >>= case tp of
+                "int" -> expectType IntegerType
+                _ -> expectType NilType
             >> mapM_ tcStatement stmt
             >> tcExpression e2
-            >>= expectType IntegerType
+            >>= case tp of
+                "int" -> expectType IntegerType
+                _ -> expectType NilType
 
         (LocalCall m args) ->
             getParameterTypes m

@@ -437,16 +437,16 @@ cgObjectUncall o m args =
        return $ load ++ call ++ invertInstructions load
     
 -- | Code generation for object construction
--- | TODO: Init ref count 
 cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectConstruction tp n =
-    do rp <- pushRegister n
+    do (rv, lv, uv) <- loadVariableAddress n
+       rp <- tempRegister
        rt <- tempRegister
+       popTempRegister >> popTempRegister
        l  <- getUniqueLabel "obj_malloc"
-       popTempRegister
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ [rp, rt]
-           store = concatMap push rr
+           store = traceShow rr concatMap push rr
            malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
            lb = l ++ "_bot"
            setVtable = [(Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"), 
@@ -454,15 +454,16 @@ cgObjectConstruction tp n =
                         (Nothing, ADDI rp ReferenceCounterIndex),
                         (Nothing, XORI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
-                        (Just lb, SUBI rp ReferenceCounterIndex)]
-       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions malloc ++ invertInstructions store ++ setVtable
+                        (Just lb, SUBI rp ReferenceCounterIndex),
+                        (Nothing, EXCH rp rv)]
+       uv                 
+       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions malloc ++ invertInstructions store ++ lv ++ setVtable ++ invertInstructions lv
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]   
 
 -- | Code generation for object destruction
--- | TODO: Check ref count
 cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectDestruction tp n =
-    do (rp, la, ua) <- loadVariableAddress n
+    do (rp, la, ua) <- loadVariableValue n
        rt <- tempRegister
        l  <- getUniqueLabel "obj_free"
        popTempRegister >> ua
@@ -476,9 +477,8 @@ cgObjectDestruction tp n =
            rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
            free = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
-           lt = l ++ "_top"
-       removeRegister (n, rp)   
-       return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions free ++ invertInstructions store 
+           lt = l ++ "_top"   
+       return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions (la ++ store ++ free)
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
 
 -- | TODO: Sanity checks 
