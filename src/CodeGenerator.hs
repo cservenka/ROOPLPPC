@@ -261,10 +261,10 @@ loadForSwap n = gets (symbolTable . saState) >>= \st ->
     case lookup n st of
         (Just ClassField {}) -> loadVariableValue n
         (Just (LocalVariable IntegerType _)) -> loadVariableValue n
-        (Just (LocalVariable (ObjectType _) _)) -> loadVariableAddress n
-        (Just (LocalVariable (CopyType _) _)) -> loadVariableAddress n
+        (Just (LocalVariable (ObjectType _) _)) -> loadVariableValue n
+        (Just (LocalVariable (CopyType _) _)) -> loadVariableValue n
         (Just (MethodParameter IntegerType _)) -> loadVariableValue n
-        (Just (MethodParameter (ObjectType _) _)) -> loadVariableAddress n
+        (Just (MethodParameter (ObjectType _) _)) -> loadVariableValue n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
 cgSwap :: SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -341,7 +341,8 @@ cgLocalBlock n e1 stmt e2 =
        rt2 <- tempRegister
        popTempRegister >> ue2
        popRegister --rn
-       let create re rt = [(Nothing, XOR rn registerSP),
+       l <- getUniqueLabel "localBlock"
+       let create re rt = [(Just l, XOR rn registerSP),
                            (Nothing, XOR rt re),
                            (Nothing, EXCH rt registerSP),
                            (Nothing, SUBI registerSP $ Immediate 1)]
@@ -383,7 +384,8 @@ loadMethodAddress (o, ro) m =
        rtgt <- tempRegister
        popTempRegister >> popTempRegister >> popTempRegister
        offsetMacro <- OffsetMacro <$> getType o <*> pure m
-       let load = [(Nothing, EXCH rv ro),
+       l <- getUniqueLabel "loadMetAdd"
+       let load = [(Just l, EXCH rv ro),
                    (Nothing, ADDI rv offsetMacro),
                    (Nothing, EXCH rt rv),
                    (Nothing, XOR rtgt rt),
@@ -397,13 +399,15 @@ loadForCall :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MInstructi
 loadForCall n = gets (symbolTable . saState) >>= \st ->
     case lookup n st of
         (Just ClassField {}) -> loadVariableValue n
+        (Just (LocalVariable (ObjectType _) _)) -> loadVariableValue n
+        (Just (LocalVariable (CopyType _) _)) -> loadVariableValue n
         (Just _) -> loadVariableAddress n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
 -- | Code generation for object calls
 cgObjectCall :: SIdentifier -> MethodName -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectCall o m args =
-    do (ro, lo, uo) <- trace "IN OBJECT CALL" loadForCall o
+    do (ro, lo, uo) <- loadForCall o
        rt <- tempRegister
        (rtgt, loadAddress) <- loadMethodAddress (o, rt) m
        l_jmp <- getUniqueLabel "l_jmp"
@@ -446,7 +450,7 @@ cgObjectConstruction tp n =
        l  <- getUniqueLabel "obj_malloc"
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ [rp, rt]
-           store = traceShow rr concatMap push rr
+           store = concatMap push rr
            malloc = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
            lb = l ++ "_bot"
            setVtable = [(Nothing, XORI rt $ AddressMacro $ "l_" ++ tp ++ "_vt"), 

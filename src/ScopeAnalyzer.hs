@@ -165,16 +165,16 @@ saStatement s =
             <*> mapM saStatement s2
             <*> saExpression e2    
 
-        (LocalBlock tp n e1 stmt e2) ->
+        (LocalBlock t n e1 stmt e2) ->
             do e1' <- saExpression e1
                enterScope
-               n' <- case tp of
-                       "int" -> saInsert (LocalVariable IntegerType n) n
-                       _     -> saInsert (LocalVariable (ObjectType tp) n) n
+               n' <- case t of
+                       IntegerType -> saInsert (LocalVariable IntegerType n) n
+                       (ObjectType tp) -> saInsert (LocalVariable (ObjectType tp) n) n
                stmt' <- mapM saStatement stmt
                leaveScope
                e2' <- saExpression e2
-               return $ LocalBlock tp n' e1' stmt' e2'
+               return $ LocalBlock t n' e1' stmt' e2'
     
         (LocalCall m args) ->
             LocalCall
@@ -288,6 +288,7 @@ prefixVtable (m:ms) m' = if comp m m' then m':ms else m : prefixVtable ms m'
     where comp (_, n) (_, n') = n == n'
 
 -- | Scope Analyses a passed class
+-- TODO: Fix offset for MAIN class
 saClass :: Offset -> [SIdentifier] -> ClassDeclaration -> ScopeAnalyzer [(TypeName, SMethodDeclaration)]
 saClass offset pids (GCDecl c _ fs ms) =
     do enterScope

@@ -201,13 +201,13 @@ localBlock :: Parser Statement
 localBlock =
     reserved "local"
     >> LocalBlock
-    <$> typeName
+    <$> dataType
     <*> identifier
     <* symbol "="
     <*> expression
     <*> block
     <* reserved "delocal"
-    <* typeName
+    <* dataType
     <* identifier
     <* symbol "="
     <*> expression
