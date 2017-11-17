@@ -14,6 +14,8 @@ import Control.Monad.Except
 import Control.Monad.State
 import Text.Pretty.Simple (pPrint)
 
+import Debug.Trace (trace, traceShow)
+
 import AST
 
 type Size = Integer

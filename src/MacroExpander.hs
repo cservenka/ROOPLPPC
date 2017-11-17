@@ -12,6 +12,8 @@ import Control.Arrow
 import AST hiding (Program, GProg, Offset)
 import PISA
 
+import Debug.Trace (trace, traceShow)
+
 import ScopeAnalyzer
 import ClassAnalyzer
 
@@ -50,7 +52,7 @@ initialState (GProg p) s =
         sizeTable = (classSize . caState) s,
         offsetTable = getOffsetTable s,
         programSize = genericLength p,
-        freeListsSize = 4,
+        freeListsSize = 7,
         stackOffset = 2048,
         initialMemoryBlockSize = 1024,
         referenceCounterIndex = 1

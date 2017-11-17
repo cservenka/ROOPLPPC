@@ -1,0 +1,53 @@
+class Cell
+    int data
+    int index
+    Cell left
+    Cell right
+
+    method setData(int value)
+        data ^= value
+
+    method append(Cell cell)
+        if right = nil & cell != nil then
+            right <=> cell
+        else skip
+        fi right != nil & cell = nil
+
+        if right != nil then
+            call right::append(cell)
+        else skip
+        fi right != nil
+        
+class DoublyLinkedList
+    Cell head
+    int length
+
+    method appendCell(Cell cell)
+        length += 1
+        if head = nil & cell != nil then
+            head <=> cell
+        else skip
+        fi head != nil & cell = nil
+
+        if head != nil then
+            call head::append(cell)
+        else skip
+        fi head != nil
+
+class Program
+    DoublyLinkedList list
+
+    method main()
+        new DoublyLinkedList list
+
+        local int x = 0
+        from x = 0 do skip
+        loop
+            local Cell cell = nil
+            new Cell cell
+            call list::appendCell(cell)
+            delocal Cell cell = nil
+            x += 1
+        until x = 3
+        delocal int x = 3
+

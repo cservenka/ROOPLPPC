@@ -146,6 +146,7 @@ saStatement s =
             <*> pure modop
             <*> saExpression e
         
+        -- TODO: Swap ownership 
         (Swap n1 n2) ->
             Swap
             <$> saLookup n1
