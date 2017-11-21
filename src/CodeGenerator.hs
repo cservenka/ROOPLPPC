@@ -265,6 +265,7 @@ loadForSwap n = gets (symbolTable . saState) >>= \st ->
         (Just (LocalVariable (CopyType _) _)) -> loadVariableValue n
         (Just (MethodParameter IntegerType _)) -> loadVariableValue n
         (Just (MethodParameter (ObjectType _) _)) -> loadVariableValue n
+        (Just (MethodParameter (CopyType _) _)) -> loadVariableValue n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
 cgSwap :: SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -272,7 +273,8 @@ cgSwap n1 n2 = if n1 == n2 then return [] else
     do (r1, l1, u1) <- loadForSwap n1
        (r2, l2, u2) <- loadForSwap n2
        u2 >> u1
-       let swap = [(Nothing, XOR r1 r2), (Nothing, XOR r2 r1), (Nothing, XOR r1 r2)]
+       l <- getUniqueLabel "swap"
+       let swap = [(Just l, XOR r1 r2), (Nothing, XOR r2 r1), (Nothing, XOR r1 r2)]
        return $ l1 ++ l2 ++ swap ++ invertInstructions (l1 ++ l2)
 
 -- | Code generation for conditionals
@@ -447,7 +449,7 @@ cgObjectConstruction tp n =
        rp <- tempRegister
        rt <- tempRegister
        popTempRegister >> popTempRegister
-       l  <- getUniqueLabel "obj_malloc"
+       l  <- getUniqueLabel "obj_con"
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
@@ -469,7 +471,7 @@ cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, M
 cgObjectDestruction tp n =
     do (rp, la, ua) <- loadVariableValue n
        rt <- tempRegister
-       l  <- getUniqueLabel "obj_free"
+       l  <- getUniqueLabel "obj_des"
        popTempRegister >> ua
        rs <- gets registerStack
        let removeVtable = [(Just lt, EXCH rt rp),
@@ -488,10 +490,11 @@ cgObjectDestruction tp n =
 -- | TODO: Sanity checks 
 cgCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgCopyReference tp n m = 
-    do rcp <- pushRegister m
-       (rp, la, ua) <- loadVariableAddress n
+    do (rcp, lp, up) <- loadVariableValue m
+    --    rcp <- pushRegister m
+       (rp, la, ua) <- loadVariableValue n
        rt <- tempRegister
-       ua >> popTempRegister
+       up >> ua >> popTempRegister
        l <- getUniqueLabel "copy"
        let reference = [(Just l, XOR rcp rp),
                         (Nothing, ADDI rp ReferenceCounterIndex),
@@ -499,13 +502,13 @@ cgCopyReference tp n m =
                         (Nothing, ADDI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
                         (Nothing, SUBI rp ReferenceCounterIndex)]
-       return $ la ++ reference 
+       return $ lp ++ la ++ reference ++ invertInstructions (lp ++ la)
 
 -- | -- | TODO: Sanity checks       
 cgUnCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
 cgUnCopyReference tp n m = 
-    do (rcp, la1, ua1) <- loadVariableAddress m
-       (rp, la2, ua2) <- loadVariableAddress n
+    do (rcp, la1, ua1) <- loadVariableValue m
+       (rp, la2, ua2) <- loadVariableValue n
        rt <- tempRegister
        l <- getUniqueLabel "uncopy"
        ua1 >> ua2 >> popTempRegister
@@ -516,7 +519,7 @@ cgUnCopyReference tp n m =
                         (Nothing, EXCH rt rp),
                         (Nothing, SUBI rp ReferenceCounterIndex)]    
        removeRegister (m, rcp)                           
-       return $ la1 ++ la2 ++ reference       
+       return $ la1 ++ la2 ++ reference ++ invertInstructions (la1 ++ la2) 
 
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -617,8 +620,9 @@ cgMalloc1 =
                     ++ invertInstructions l_e1_outer ++         -- Clear r_e1_o
                     [(Just l_o_test, BEQ rt registerZero l_o_test_f),
                      (Nothing, XORI rt $ Immediate 1),          -- S1_outer start
-                     (Nothing, ADDI r_counter $ Immediate 1),   -- counter++
-                     (Nothing, RL r_csize $ Immediate 1)]       -- call double(csize)
+                     (Nothing, ADDI r_counter $ Immediate 1)]   -- counter++
+                     ++ invertInstructions l_block ++ 
+                     [(Nothing, RL r_csize $ Immediate 1)]       -- call double(csize)
                     ++ concatMap pushRegisterToStack tmpRegisterList
                     ++
                     [(Nothing, BRA l_m_entry)]                  -- call malloc1()
@@ -794,7 +798,8 @@ cgProgram p =
                  (Nothing, EXCH rb registerFLPs),             -- Store address of first block in last element of free lists
                  (Nothing, ADDI registerFLPs $ Immediate 1),  -- Index to end of free lists
                  (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
-                 (Nothing, ADDI registerSP StackOffset),      -- Init stack pointer
+                --  (Nothing, XOR registerSP registerHP),       -- Init stack pointer 1/2
+                 (Nothing, ADDI registerSP StackOffset),      -- Init stack pointer 2/2
                  (Nothing, XOR registerThis registerSP),      -- Store address of main object
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Store address of vtable in rv
                  (Nothing, EXCH rv registerSP),               -- Add address of vtable to stack
@@ -810,6 +815,7 @@ cgProgram p =
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Clear rv
                  (Nothing, XOR registerThis registerSP),      -- Clear 'this'
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
+                --  (Nothing, XOR registerSP registerHP),        -- Clear stack pointer
                  (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
                  (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
                  (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer

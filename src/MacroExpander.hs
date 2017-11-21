@@ -52,8 +52,8 @@ initialState (GProg p) s =
         sizeTable = (classSize . caState) s,
         offsetTable = getOffsetTable s,
         programSize = genericLength p,
-        freeListsSize = 7,
-        stackOffset = 2048,
+        freeListsSize = 10,
+        stackOffset = 16384,
         initialMemoryBlockSize = 1024,
         referenceCounterIndex = 1
         }
@@ -142,3 +142,4 @@ meProgram (GProg p) = GProg <$> mapM expandPair p
 -- | Interface for starting the macro extension process
 expandMacros :: (MProgram, SAState) -> Except String Program
 expandMacros (p, s) = runReaderT (runME $ meProgram p) $ initialState p s
+
