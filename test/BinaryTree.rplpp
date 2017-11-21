@@ -3,29 +3,38 @@ class Node
     Node right
     int value
 
-    method setValue(int y)
-        value ^= y 
+    method setValue(int newValue)
+        value ^= newValue 
 
-    method insertNode(Node node, int value)
-        if value < value then                       // Determine if we insert left or right
+    method insertNode(Node node, int nodeValue)
+        if nodeValue < value then                       // Determine if we insert left or right
+            if left = nil & node != nil then
+                left <=> node                           // If open left node, store here
+            else skip
+            fi left != nil & node = nil
+
             if left != nil then
-                call left::insertNode(node, value)  // If current node has left, continue iterating
-            else
-                left <=> node                       // Else, store new node here
+                call left::insertNode(node, nodeValue)  // If current node has left, continue iterating
+            else skip
             fi left != nil
         else
+            if right = nil & node != nil then
+                right <=> node                          // If open right node spot, store here
+            else skip
+            fi right != nil & node = nil
+
             if right != nil then
-                call right::insertNode(node, value) // If current node has, continue searching
-            else
-                right <=> node                      // Else, store new node here
+                call right::insertNode(node, nodeValue) // If current node has, continue searching
+            else skip
             fi right != nil
-        fi value < value
+        fi nodeValue < value
 
     method getSum(int result)
-        result += value                  // Add the value of this node to the sum                         
+        result += value                  // Add the value of this node to the sum   
+
         if left != nil then
             call left::getSum(result)   // If we have a left child, follow that path
-        else skip                        // Else, skip
+        else skip                       // Else, skip
         fi left != nil
 
         if right != nil then
@@ -36,46 +45,65 @@ class Node
     method mirror()
         left <=> right                  // Swap left and right children
 
-        if left != nil then
-            call left::mirror()         // Recursively swap children if left != nil
-        else skip
-        fi left != nil
+        if left = nil then skip
+        else call left::mirror()        // Recursively swap children if left != nil
+        fi left = nil
 
-        if right != nil then
-            call right::mirror()        // Recursively swap children if right != nil
-        else skip
-        fi right != nil                 
+        if right = nil then skip
+        else call right::mirror()       // Recursively swap children if right != nil
+        fi right = nil                 
 
+    
 class Tree
     Node root
 
+    method setRoot(Node node)
+        root <=> node
+
     method insertNode(Node node, int value)
+        if root = nil & node != nil then
+            root <=> node
+        else skip
+        fi root != nil & node = nil
+
         if root != nil then
             call root::insertNode(node, value)
-        else
-            node <=> root
+        else skip
         fi root != nil
 
     method sum(int result)
-        call root::getSum(result)
+        if root != nil then
+            call root::getSum(result)
+        else skip
+        fi root != nil
 
     method mirror()
-        call root::mirror()
+        if root != nil then
+            call root::mirror()
+        else skip
+        fi root != nil
 
 class Program
     int sumResult
+    Tree tree
+    int nodeCount
 
     method main()
         new Tree tree
-
+        nodeCount += 3
+        
+        local int x = 0
         from x = 0 do
             skip
         loop
-            new Node node
-            call node::setValue(x)
-            call tree::insertNode(node, x)
+            local Node node = nil
+            new Node node                   // Init new node
+            call node::setValue(x)          // Set node value
+            call tree::insertNode(node, x)  // Insert node in tree
+            delocal Node node = nil
             x += 1
-        until x = 10
+        until x = nodeCount
+        delocal int x = nodeCount
 
         call tree::sum(sumResult)
         call tree::mirror()

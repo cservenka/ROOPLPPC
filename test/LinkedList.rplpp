@@ -6,48 +6,73 @@ class Cell
         data ^= value     
 
     method append(Cell cell)
-        if next != nil then         // If current cell already has a next node, continue
-            call next::append(cell)
-        else
-            next <=> cell           // Else, insert new cell as next of current cell
+        if next = nil & cell != nil then
+            next <=> cell                   // Store as next cell if current cell is end of list
+        else skip
+        fi next != nil & cell = nil
+
+        if next != nil then
+            call next::append(cell)         // Recusively search until we reach end of list
+        else skip
         fi next != nil
                
 class LinkedList
     Cell head
-    int length
+    int listLength
 
-    method append(Cell cell)
-        call head::append(cell)     // Iterate list until we reach the end, then insert the node
-        length += 1 
+    method insertHead(Cell cell)
+        if head = nil & cell != nil then
+            head <=> cell               // Set cell as head of list if list is empty
+        else skip
+        fi head != nil & cell = nil
 
-    method prepend(Cell cell)
-        call cell::append(head)     // Set cell.next = head. head = nil after execution
-        cell <=> head               // Set head = cell. Cell is nil after execution
-        length += 1
+    method appendCell(Cell cell)
+        call insertHead(cell)           // Insert as head if empty list
+
+        if head != nil then
+            call head::append(cell)     // Iterate list until we reach the end, then insert the node
+        else skip
+        fi head != nil
+
+        listLength += 1                 // Increment lenght
+
+    method prependCell(Cell cell)
+        call insertHead(cell)           // Insert as head if empty list
+
+        if cell != nil & head != nil then
+            call cell::append(head)     // Set cell.next = head. head = nil after execution
+        else skip
+        fi cell != nil & head = nil
+
+        if cell != nil & head = nil then
+            cell <=> head               // Set head = cell. Cell is nil after execution
+        else skip
+        fi cell = nil & head != nil
+
+        listLength += 1                 // Increment length
 
     method length(int result)
-        result ^= length    
+        result ^= listLength    
 
 class Program
+    LinkedList linkedList
     int sumResult
     int listLength
 
     method main()
         new LinkedList linkedList           // Init new linked linkedList
+        listLength += 10
 
+        local int x = 0
         from x = 0 do
             skip
         loop
-            new Cell cell                   // Instantiate new cell
-            call cell::constructor(x)       // Set value of cell
-            call linkedList::append(cell)   // Append it to the linkedList
+            local Cell cell = nil
+            new Cell cell                       // Instantiate new cell
+            call cell::constructor(x)           // Set value of cell
+            call linkedList::appendCell(cell)   // Append it to the linkedList
+            delocal Cell cell = nil
             x += 1                      
-        until x = 10
-
-        call linkedList::sum(sumResult)     // Set sum of linkedList in sumResult
-
-        new Cell head
-        call head::constructor(x)           // Init new head of list
-        call linkedlist::prepend(head)      // Set new head of the list     
-
-        call linkedList::length(listLength) // Get length of linked list            
+        until x = listLength
+        delocal int x = listLength
+          

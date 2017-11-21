@@ -3,18 +3,40 @@ class Cell
     int index
     Cell left
     Cell right
+    Cell self
 
     method setData(int value)
         data ^= value
 
+    method setIndex(int i)
+        index ^= i    
+
+    method setLeft(Cell cell)
+        left <=> cell
+
+    method setRight(Cell cell)
+        right <=> cell
+
+    method setSelf(Cell cell)
+        self <=> cell
+
     method append(Cell cell)
-        if right = nil & cell != nil then
-            right <=> cell
+        if right = nil & cell != nil then   // If current cell does not have a right neighbour
+            right <=> cell                  // Set new cell as right neighbour of current cell
+        
+            local Cell selfCopy = nil      
+            copy Cell self selfCopy         // Copy reference to current cell
+            call right::setLeft(selfCopy)   // Set current cell as left neighbour of newly added right neighbour
+            delocal Cell selfCopy = nil
+
+            local int cellIndex = index + 1
+            call right::setIndex(cellIndex) // Set cell index in newly added right neightbour of current cell
+            delocal int cellIndex = index + 1
         else skip
         fi right != nil & cell = nil
 
         if right != nil then
-            call right::append(cell)
+            call right::append(cell)        // Keep searching for empty right neighbour
         else skip
         fi right != nil
         
@@ -23,31 +45,40 @@ class DoublyLinkedList
     int length
 
     method appendCell(Cell cell)
-        length += 1
         if head = nil & cell != nil then
             head <=> cell
         else skip
         fi head != nil & cell = nil
 
-        if head != nil then
+        if head != nil then 
             call head::append(cell)
         else skip
         fi head != nil
 
+        length += 1
+
 class Program
     DoublyLinkedList list
+    int listLength
 
     method main()
         new DoublyLinkedList list
+        listLength += 10
 
         local int x = 0
         from x = 0 do skip
         loop
             local Cell cell = nil
-            new Cell cell
-            call list::appendCell(cell)
+                new Cell cell
+
+                local Cell cellCopy = nil
+                copy Cell cell cellCopy
+                call cell::setSelf(cellCopy)
+                delocal Cell cellCopy = nil
+
+                call cell::setData(x)
+                call list::appendCell(cell)
             delocal Cell cell = nil
             x += 1
-        until x = 3
-        delocal int x = 3
-
+        until x = listLength
+        delocal int x = listLength 
