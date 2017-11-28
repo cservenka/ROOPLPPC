@@ -56,10 +56,7 @@ class Node
     
 class Tree
     Node root
-
-    method setRoot(Node node)
-        root <=> node
-
+    
     method insertNode(Node node, int value)
         if root = nil & node != nil then
             root <=> node
@@ -89,7 +86,7 @@ class Program
     int nodeCount
 
     method main()
-        new Tree tree
+        new Tree tree 
         nodeCount += 3
         
         local int x = 0
