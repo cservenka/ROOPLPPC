@@ -10,19 +10,28 @@ type MethodName = String
 data DataType = IntegerType
               | ObjectType TypeName
               | CopyType TypeName
+              -- | ArrayType (TypeName, Expression)
+              | ObjectArrayType TypeName
+              | IntegerArrayType
               | NilType
   deriving (Show)
 
 -- Types
 instance Eq DataType where
   IntegerType == IntegerType = True
+  IntegerArrayType == IntegerArrayType = True
   NilType == NilType = True
   NilType == (ObjectType _) = True
   (ObjectType _) == NilType = True
+  NilType == (ObjectArrayType _) = True
+  (ObjectArrayType _) == NilType = True
   (ObjectType t1) == (ObjectType t2) = t1 == t2
+  (CopyType t1) == (CopyType t2) = t1 == t2
+  (ObjectArrayType t1) == (ObjectArrayType t2) = t1 == t2
   (CopyType t1) == (ObjectType t2) = t1 == t2
   (ObjectType t1) == (CopyType t2) = t1 == t2
-  (CopyType t1) == (CopyType t2) = t1 == t2
+  (CopyType t1) == (ObjectArrayType t2) = t1 == t2
+  (ObjectArrayType t1) == (CopyType t2) = t1 == t2
   _ == _ = False
 
 -- Binary Operators
@@ -72,6 +81,8 @@ data GStmt m v = Assign v ModOp (GExpr v)
                | ObjectDestruction TypeName v
                | CopyReference TypeName v v
                | UnCopyReference TypeName v v
+               | ArrayConstruction (TypeName, Integer) v 
+               | ArrayDestruction (TypeName, Integer) v 
                | Skip
   deriving (Show, Eq)
 

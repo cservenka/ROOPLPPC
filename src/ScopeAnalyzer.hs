@@ -8,6 +8,7 @@ module ScopeAnalyzer
 
 import Data.Maybe
 import Data.List
+import Data.Typeable
 
 import Control.Monad.State
 import Control.Monad.Except
@@ -25,7 +26,7 @@ data SAState =
         symbolTable :: SymbolTable,
         scopeStack :: [Scope],
         virtualTables :: [(TypeName, [SIdentifier])],
-        ownerShipTable :: [(SIdentifier, [SIdentifier])],
+        ownershipTable :: [(SIdentifier, [SIdentifier])],
         caState :: CAState,
         mainMethod :: SIdentifier
     } deriving (Show, Eq)
@@ -34,7 +35,7 @@ newtype ScopeAnalyzer a = ScopeAnalyzer { runSA :: StateT SAState (Except String
     deriving (Functor, Applicative, Monad, MonadState SAState, MonadError String)
 
 initialState :: CAState -> SAState
-initialState s = SAState { symbolIndex = 0, symbolTable = [], scopeStack = [], virtualTables = [], ownerShipTable = [], caState = s, mainMethod = 0 }
+initialState s = SAState { symbolIndex = 0, symbolTable = [], scopeStack = [], virtualTables = [], ownershipTable = [], caState = s, mainMethod = 0 }
 
 -- | Add an empty scope to the scope stack
 enterScope :: ScopeAnalyzer ()
@@ -57,12 +58,6 @@ addToScope b =
     do ts <- topScope
        modify $ \s -> s { scopeStack = (b : ts) : drop 1 (scopeStack s) }
 
--- | Remove a symbol from the current scope
-removeFromScope :: (Identifier, SIdentifier) -> ScopeAnalyzer ()
-removeFromScope (identifier, _) =
-    do ts <- topScope
-       modify $ \s -> s { scopeStack = filter (\(n, _) -> n /= identifier) ts : drop 1 (scopeStack s) }
-
 -- | Inserts an identifier and symbol pair into the symbol table and current scope
 saInsert :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
 saInsert sym n =
@@ -73,14 +68,13 @@ saInsert sym n =
        addToScope (n, i)
        return i
 
--- | Removed an identifier and symbol pair from the current scope
-saRemove :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
-saRemove sym n =
+saUpdate :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
+saUpdate sym n = 
     do ts <- topScope
        i <- saLookup n
-       when (isNothing $ lookup n ts) (throwError $ "Removal of unsued symbol: " ++ n)
-       removeFromScope (n, i)
-       return i
+       when (isNothing $ lookup n ts) (throwError $ "Unknown symbol: " ++ n)
+       modify $ \s -> s { symbolTable = (i, sym) : filter (\(x, _) -> i /= x) (symbolTable s) }
+       return i       
 
 -- | Looks up an identifier in the scope
 saLookup :: Identifier -> ScopeAnalyzer SIdentifier
@@ -91,39 +85,43 @@ saLookup n = gets scopeStack >>= \ss ->
 
 -- | Inserts a new owner into the ownership table        
 saInsertOwner :: SIdentifier -> ScopeAnalyzer ()
-saInsertOwner n = gets ownerShipTable >>= \ost -> 
+saInsertOwner n = gets ownershipTable >>= \ost -> 
     case lookup n ost of
-        Nothing -> modify $ \s -> s { ownerShipTable = (n, []) : ownerShipTable s }
-        Just _  -> throwError $ "ICE: " ++ show n ++ " already exists in ownership table"
+        Nothing -> modify $ \s -> s { ownershipTable = (n, []) : ownershipTable s }
+        Just _ -> pure ()
+        -- Just _  -> throwError $ "ICE: " ++ show n ++ show ost ++ " already exists in ownership table"
 
 -- | Removes an existing owner from the ownership table        
 saRemoveOwner :: Identifier -> ScopeAnalyzer ()
-saRemoveOwner n = gets ownerShipTable >>= \ost ->
+saRemoveOwner n = gets ownershipTable >>= \ost ->
     do n' <- saLookup n
        case lookup n' ost of
           Nothing -> throwError $ "Removal of unknown reference owner: " ++ n
           Just xs -> case length xs of
-                        0 -> modify $ \s -> s { ownerShipTable = filter (\(x, _) -> n' /= x) (ownerShipTable s) }
-                        _ -> throwError $ show n ++ " cannot be deallocated as references to it still exists"
+                        0 -> modify $ \s -> s { ownershipTable = filter (\(x, _) -> n' /= x) (ownershipTable s) }
+                        _ -> throwError $ show n ++ " cannot be deallocated as references to it still exists"                                              
           
--- | Inserts ownership over m for n    
-saInsertOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
-saInsertOwnerShip n m = gets ownerShipTable >>= \ost ->
+-- | Inserts ownership over m for n
+-- EXPAND SO OWNERSHIP TABLE IS PER SCOPE BASIS  
+saInsertOwnership :: Identifier -> Identifier -> ScopeAnalyzer ()
+saInsertOwnership n m = gets ownershipTable >>= \ost ->
     do n' <- saLookup n
        m' <- saLookup m
        case lookup n' ost of
-           Nothing -> throwError $ "Error: " ++ show n ++ " cannot be reference"
-           Just xs -> modify $ \s -> s { ownerShipTable = (n', m':xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }    
+           Nothing -> throwError $ "Error: " ++ show n ++ " cannot be referenced"
+           Just xs -> modify $ \s -> s { ownershipTable = (n', m':xs) : filter (\(x, _) -> n' /= x) (ownershipTable s) }    
 
 -- | Removes ownership over m from n
-saRemoveOwnerShip :: Identifier -> Identifier -> ScopeAnalyzer ()
-saRemoveOwnerShip n m = gets ownerShipTable >>= \ost ->
+-- TODO: EXPAND SO OWNERSHIP TABLE IS PER SCOPE BASIS
+saRemoveOwnership :: Identifier -> Identifier -> ScopeAnalyzer ()
+saRemoveOwnership n m = gets ownershipTable >>= \ost ->
     do n' <- saLookup n
        m' <- saLookup m
        case lookup n' ost of
            Nothing -> throwError $ "Error: Unknown reference owner: " ++ show n
            Just xs -> do when (m' `notElem` xs) (throwError $ "Error: " ++ show m ++ " is not a reference of " ++ show n)
-                         modify $ \s -> s { ownerShipTable = (n', filter (/= m') xs) : filter (\(x, _) -> n' /= x) (ownerShipTable s) }        
+                         modify $ \s -> s { ownershipTable = (n', filter (/= m') xs) : filter (\(x, _) -> n' /= x) (ownershipTable s) }    
+                                                
 
 -- | Scope Analyses Expressions
 saExpression :: Expression -> ScopeAnalyzer SExpression
@@ -165,13 +163,11 @@ saStatement s =
             <*> mapM saStatement s1
             <*> mapM saStatement s2
             <*> saExpression e2    
-
+ 
         (LocalBlock t n e1 stmt e2) ->
             do e1' <- saExpression e1
                enterScope
-               n' <- case t of
-                       IntegerType -> saInsert (LocalVariable IntegerType n) n
-                       (ObjectType tp) -> saInsert (LocalVariable (ObjectType tp) n) n
+               n' <- saInsert (LocalVariable t n) n
                stmt' <- mapM saStatement stmt
                leaveScope
                e2' <- saExpression e2
@@ -208,7 +204,7 @@ saStatement s =
         
         (ObjectDestruction tp n) ->
             do saRemoveOwner n
-               n' <- saRemove (LocalVariable (ObjectType tp) n) n
+               n' <- saLookup n
                return $ ObjectDestruction tp n'
 
         (ObjectBlock tp n stmt) ->
@@ -222,16 +218,24 @@ saStatement s =
         
         (CopyReference tp n m) ->
             do n' <- saLookup n
-               m' <- saInsert (LocalVariable (CopyType tp) m) m
-               saInsertOwnerShip n m
+               m' <- saUpdate (LocalVariable (CopyType tp) m) m
+            --    saInsertOwnership n m
                return $ CopyReference tp n' m'
         
         (UnCopyReference tp n m) ->
             do n' <- saLookup n
-               saRemoveOwnerShip n m
-               m' <- saRemove (LocalVariable (CopyType tp) m) m
+            --    saRemoveOwnership n m
+               m' <- saUpdate (LocalVariable (ObjectType tp) m) m
                return $ UnCopyReference tp n' m'
 
+        (ArrayConstruction (tp, v) n) ->
+            do n' <- saLookup n
+               return $ ArrayConstruction (tp, v) n'
+        
+        (ArrayDestruction (tp, v) n) -> 
+            do n' <- saLookup n
+               return $ ArrayDestruction (tp, v) n'       
+                
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
           var _ = []
@@ -304,7 +308,7 @@ saClass offset pids (GCDecl c _ fs ms) =
        ms'' <- mapM saMethod $ zip (repeat c) ms
        leaveScope
        return $ ms' ++ ms''
-    where insertClassField (o, GDecl tp n) = saInsert (ClassField tp n c o) n
+    where insertClassField (o, GDecl tp n) = traceShow (o, tp, n) saInsert (ClassField tp n c o) n
           insertMethod (GMDecl n ps _) = saInsert (Method (map getType ps) n) n >>= getMethodName
           getType (GDecl tp _) = tp
 

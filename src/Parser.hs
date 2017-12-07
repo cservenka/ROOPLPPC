@@ -86,6 +86,9 @@ symbol = Token.symbol tokenParser
 parens :: Parser a -> Parser a
 parens = Token.parens tokenParser
 
+brackets :: Parser a -> Parser a
+brackets = Token.brackets tokenParser
+
 colon :: Parser String
 colon = Token.colon tokenParser
 
@@ -94,6 +97,11 @@ commaSep = Token.commaSep tokenParser
 
 typeName :: Parser TypeName
 typeName = identifier
+                    
+arrayTypeName :: Parser (TypeName, Integer)
+arrayTypeName = do x <- try typeName <|> string "int"
+                   y <- brackets integer
+                   return (x, y)
 
 methodName :: Parser MethodName
 methodName = identifier
@@ -239,7 +247,21 @@ unCopyReference =
     >> UnCopyReference
     <$> typeName
     <*> identifier
-    <*> identifier     
+    <*> identifier
+    
+arrayConstruction :: Parser Statement
+arrayConstruction =
+    reserved "new"
+    >> ArrayConstruction
+    <$> arrayTypeName 
+    <*> identifier  
+    
+arrayDestruction :: Parser Statement
+arrayDestruction =
+    reserved "delete"
+    >> ArrayDestruction
+    <$> arrayTypeName
+    <*> identifier    
 
 statement :: Parser Statement
 statement = try assign
@@ -251,8 +273,9 @@ statement = try assign
         <|> objectCall
         <|> objectUncall
         <|> localBlock
-        <|> objectBlock
-        <|> objectConstruction
+        <|> objectBlock 
+        <|> try arrayConstruction <|> objectConstruction
+        <|> arrayDestruction
         <|> objectDestruction
         <|> skip
         <|> copyReference
@@ -263,7 +286,11 @@ block = many1 statement
 
 {-- Top Level Parsers --}
 dataType :: Parser DataType
-dataType = IntegerType <$ reserved "int" <|> ObjectType <$> typeName
+dataType = try (IntegerArrayType <$ reserved "int" <* symbol "[" <* symbol "]")  
+           <|> IntegerType <$ reserved "int"
+       <|> try (ObjectArrayType <$> typeName <* symbol "[" <* symbol "]")
+           <|> ObjectType <$> typeName
+       
 
 variableDeclaration :: Parser VariableDeclaration
 variableDeclaration = GDecl <$> dataType <*> identifier

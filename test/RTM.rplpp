@@ -1,0 +1,94 @@
+class Cell
+    Cell right
+    cell left
+    int data
+    int index
+    cell self
+
+    method getLeft(Cell cell)
+        right <=> cell
+
+    method getRight(Cell cell)
+        left <=> cell
+    
+    method getSelf(Cell cell)
+        self <=> cell
+
+       
+
+    method moveRight(Cell cell)
+        if right = nil then
+            local Cell tmp = nil
+             new Cell cell
+            copy Cell cell tmp
+            uncall cell::getSelf(tmp)  // Set self
+
+            copy Cell self tmp
+            uncall right::getLeft(tmp)  // set current as left of new cell
+            delocal Cell tmp = nil
+        fi right != nil
+
+        if left = nil then
+            local Cell tmp = nil
+            new Cell left
+            copy Cell left tmp
+            uncall left::getSelf(tmp)  // Set self
+
+            copy Cell self tmp
+            uncall left::getRight(tmp)  // set current as left of new cell
+            delocal Cell tmp = nil
+        fi left != nil
+
+        cell <=> right
+
+    method lookup(pos, symbol)
+        if pos = index then
+            symbol <=> data
+        else
+            if pos < index then
+                call left::lookup(pos, symbol)
+            else
+                call right::lookup(pos, symbol)
+            fi pos < index
+        fi pos = index
+
+
+class RTM
+    Cell tapeHeap
+
+
+    method main()
+
+
+    method simulate(Cell tapeHead, int pos, int state, int q1[], int s1[], int s2[], int q2[], int pc) 
+        from state = Qs do
+            pc += 1                                 // Increment pc local int symbol = 0
+            call tapeHead::lookup(pos, symbol)      //Fetch current symbol 
+            call inst(state, symbol, q1, s1, s2, q2, pc, tapeHead)
+            uncall tapeHead::lookup(pos, symbol)    //Zero-clear symbol delocal symbol = 0
+
+            if pc = PC_MAX then                     // Reset pc 
+                pc ^= PC_MAX
+            fi pc = 0 
+        until state = Qf
+ 
+    method inst(int state, int symbol, int q1[], int s1[], int s2[], int q2[], int pc, Cell tapeHead)
+        if (state = q1[pc]) & (symbol = s1[pc]) then    // Symbol rule:
+            state += q2[pc]-q1[pc]                      // set state to q2[pc]
+            symbol += s2[pc]-s1[pc]                     // set symbol to s2[pc]
+        fi (state = q2[pc]) & (symbol = s2[pc]) 
+        if (state = q1[pc]) & (s1[pc] = SLASH) then     // Move rule:
+            state += q2[pc]-q1[pc]                      // set state to q2[pc] 
+            if s2[pc] = RIGHT then  
+                call moveRight(tapeHead)                // Move tape head right 
+            fi s2[pc] = RIGHT   
+            if s2[pc] = LEFT then   
+                uncall moveRight(tapeHead)             // Move tape head left
+            fi s2[pc] = LEFT
+        fi (state = q2[pc]) && (s1[pc] = SLASH)
+
+        
+    method moveRight(Cell tapeHead)
+        local Cell cell right = nil
+        call tapeHead::moveRight(right)
+        tapeHead <=> right

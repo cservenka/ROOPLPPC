@@ -148,20 +148,36 @@ tcStatement s =
                case t of 
                 (ObjectType _) -> expectType t (ObjectType tp)
                 _ -> throwError $ "Expected type: " ++ show (ObjectType tp) ++ " Actual type: " ++ show t
-
+        
+        -- Allow copying with a copy type        
         CopyReference _ n _ ->
             do t <- getType n
                case t of
                 (ObjectType _) -> pure ()
                 _ -> throwError $ "Non-object type " ++ show t ++ " does not support reference copying" 
-
+        
+        -- Allow uncopying with two identical copies        
         UnCopyReference tp n m ->
             do t1 <- getType n
                t2 <- getType m
                when (t1 /= ObjectType tp && t2 /= CopyType tp) (throwError $ "Passed type " ++ show tp ++ " does not match the arguments types: " ++ show t1 ++ ", " ++ show t2)
                case (t1, t2) of
                 (ObjectType _, CopyType _) -> expectType t1 t2 
-                _ -> throwError $ "Expected variables with types (" ++ show (ObjectType tp) ++ ", " ++ show (CopyType tp) ++ "). Actual Types given: (" ++ show t1 ++ ", " ++ show t2 ++ ")"
+                _ -> pure ()
+                -- _ -> throwError $ "Expected variables with types (" ++ show (ObjectType tp) ++ ", " ++ show (CopyType tp) ++ "). Actual Types given: (" ++ show t1 ++ ", " ++ show t2 ++ ")"
+
+        -- TODO: fix        
+        (ArrayConstruction (tp, _) n) -> 
+            do t2 <- getType n
+               case tp of
+                 "int" -> expectType t2 IntegerArrayType
+                 _     -> expectType t2 (ObjectArrayType tp) 
+
+        (ArrayDestruction (tp, _) n) -> 
+            do t2 <- getType n
+               case tp of
+                 "int" -> expectType t2 IntegerArrayType
+                 _     -> expectType t2 (ObjectArrayType tp)         
                
 getMethodName :: SIdentifier -> TypeChecker Identifier
 getMethodName i = asks symbolTable >>= \st ->

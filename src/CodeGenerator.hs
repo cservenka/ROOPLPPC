@@ -521,6 +521,56 @@ cgUnCopyReference tp n m =
        removeRegister (m, rcp)                           
        return $ la1 ++ la2 ++ reference ++ invertInstructions (la1 ++ la2) 
 
+-- TODO: FIX       
+cgArrayConstruction :: TypeName -> Integer -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgArrayConstruction tp size n =
+    do (ra, la, ua) <- loadVariableAddress n
+       rp <- tempRegister
+       rt <- tempRegister
+       ua >> popTempRegister >> popTempRegister
+       l  <- getUniqueLabel "arr_con"
+       rs <- gets registerStack
+       let rr = (registerThis : map snd rs) \\ [rp, rt]
+           store = concatMap push rr
+           malloc = [(Just l, ADDI rt $ Immediate $ 1 + 2)] ++ push rt ++ push rp
+           lb = l ++ "_bot"
+           initArray = la ++
+                       [(Nothing, XORI rt $ Immediate 0), 
+                        (Nothing, EXCH rt rp),
+                        (Nothing, ADDI rp ReferenceCounterIndex),
+                        (Nothing, XORI rt $ Immediate 1),
+                        (Nothing, EXCH rt rp),
+                        (Just lb, SUBI rp ReferenceCounterIndex),
+                        (Nothing, EXCH rp ra)] ++
+                       invertInstructions la 
+       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions (malloc ++ store) ++ initArray
+    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)] 
+
+-- TODO: FIX    
+cgArrayDestruction :: TypeName -> Integer -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgArrayDestruction tp size n =
+    do (ra, la, ua) <- loadVariableAddress n
+       rp <- tempRegister
+       rt <- tempRegister
+       ua >> popTempRegister >> popTempRegister
+       l  <- getUniqueLabel "arr_con"
+       rs <- gets registerStack
+       let rr = (registerThis : map snd rs) \\ [rp, rt]
+           store = concatMap push rr
+           malloc = [(Just l, ADDI rt $ Immediate $ 1 + 2)] ++ push rt ++ push rp
+           lb = l ++ "_bot"
+           initArray = la ++
+                       [(Nothing, XORI rt $ Immediate 0), 
+                        (Nothing, EXCH rt rp),
+                        (Nothing, ADDI rp ReferenceCounterIndex),
+                        (Nothing, XORI rt $ Immediate 1),
+                        (Nothing, EXCH rt rp),
+                        (Just lb, SUBI rp ReferenceCounterIndex),
+                        (Nothing, EXCH rp ra)] ++
+                       invertInstructions la 
+       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions (malloc ++ store) ++ initArray
+    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]    
+
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
 cgStatement (Assign n modop e) = cgAssign n modop e
@@ -538,6 +588,8 @@ cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
 cgStatement Skip = return []
 cgStatement (CopyReference tp n m) = cgCopyReference tp n m
 cgStatement (UnCopyReference tp n m)  = cgUnCopyReference tp n m
+cgStatement (ArrayConstruction (tp, v) n) = cgArrayConstruction tp v n
+cgStatement (ArrayDestruction (tp, v) n) = cgArrayDestruction tp v n
 
 -- | Code generation for methods
 cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
