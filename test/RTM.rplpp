@@ -75,23 +75,22 @@ class RTM
         local Cell right = nil
         call tapeHead::getRight(right)
 
-        if right != nil then
-            local Cell oldTapeHead = nil
-            call right::getLeft(oldTapeHead)    // Retrieve copy to current head
-            uncopy Cell oldTapeHead tapeHead    // uncompute reference to current head
-            uncall right::getLeft(oldTapeHead)  // store copy to current head
-            delocal Cell oldTapehead = nil
-            tapeHead <=> right                  // Set right as new tape head
-        else
-            new Cell right
-            local Cell tmp = nil
-            copy Cell tapeHead tmp              // Copy current tape head
-            uncall right::getLeft(tmp)          // Store left reference in new cell
-            copy Cell right tmp                 // Copy reference to new right cell
-            uncall right::getSelf(tmp)          // Store 'self' in new cell
-            delocal Cell tmp = nil
-            call moveRight(tapeHead)
-        fi right != nil
+        local Cell oldTapeHead = nil
+        call right::getLeft(oldTapeHead)    // Retrieve copy to current head
+        uncopy Cell oldTapeHead tapeHead    // uncompute reference to current head
+        uncall right::getLeft(oldTapeHead)  // store copy to current head
+        delocal Cell oldTapehead = nil
+        tapeHead <=> right                  // Set right as new tape head
+
+        new Cell right                      // Init new right cell 
+        local Cell tmp = nil
+        copy Cell tapeHead tmp              // Copy current tape head
+        uncall right::getLeft(tmp)          // Store left reference in new cell
+        copy Cell right tmp                 // Copy reference to new right cell
+        uncall right::getSelf(tmp)          // Store 'self' in new cell
+        delocal Cell tmp = nil
+        uncall tapeHead::getRight(right)    // Store right as new right cell of head
+
         delocal Cell right = nil
 
 
