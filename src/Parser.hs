@@ -10,6 +10,8 @@ import Text.Parsec.Expr
 import Text.Parsec.Language
 import qualified Text.Parsec.Token as Token
 
+import Debug.Trace (trace, traceShow)
+
 import AST
 
 {-- Language Definition --}
@@ -71,6 +73,16 @@ tokenParser = Token.makeTokenParser languageDef
 identifier :: Parser String
 identifier = Token.identifier tokenParser
 
+arrElemIdentifier :: Parser (String, Expression)
+arrElemIdentifier = do x <- identifier
+                       y <- brackets expression
+                       return (x, y)
+
+anyIdentifier :: Parser (String, Maybe Expression)
+anyIdentifier = do x <- identifier
+                   y <- optionMaybe $ brackets expression
+                   return (x, y)              
+
 reserved :: String -> Parser ()
 reserved = Token.reserved tokenParser
 
@@ -98,9 +110,9 @@ commaSep = Token.commaSep tokenParser
 typeName :: Parser TypeName
 typeName = identifier
                     
-arrayTypeName :: Parser (TypeName, Integer)
+arrayTypeName :: Parser (TypeName, Expression)
 arrayTypeName = do x <- try typeName <|> string "int"
-                   y <- brackets integer
+                   y <- brackets expression
                    return (x, y)
 
 methodName :: Parser MethodName
@@ -113,11 +125,14 @@ constant = Constant <$> integer
 variable :: Parser Expression
 variable = Variable <$> identifier
 
+arrayElementVariable :: Parser Expression
+arrayElementVariable = ArrayElement <$> arrElemIdentifier 
+
 nil :: Parser Expression
 nil = Nil <$ reserved "nil"
 
 expression :: Parser Expression
-expression = buildExpressionParser opTable $ constant <|> variable <|> nil
+expression = buildExpressionParser opTable $ constant <|> try arrayElementVariable <|> variable <|> nil
     where binop (t, op) = Infix (Binary op <$ reservedOp t) AssocLeft
           opTable = (map . map) binop operatorTable
 
@@ -130,8 +145,11 @@ modOp = ModAdd <$ symbol "+="
 assign :: Parser Statement
 assign = Assign <$> identifier <*> modOp <*> expression
 
+assignArrElem :: Parser Statement
+assignArrElem = AssignArrElem <$> arrElemIdentifier <*> modOp <*> expression
+
 swap :: Parser Statement
-swap = Swap <$> identifier <* symbol "<=>" <*> identifier
+swap = Swap <$> anyIdentifier <* symbol "<=>" <*> anyIdentifier
 
 conditional :: Parser Statement
 conditional =
@@ -162,48 +180,48 @@ localCall =
     reserved "call"
     >> LocalCall
     <$> methodName
-    <*> parens (commaSep identifier)
+    <*> parens (commaSep anyIdentifier)
 
 localUncall :: Parser Statement
 localUncall =
     reserved "uncall"
     >> LocalUncall
     <$> methodName
-    <*> parens (commaSep identifier)
+    <*> parens (commaSep anyIdentifier)
 
 objectCall :: Parser Statement
 objectCall =
     reserved "call"
     >> ObjectCall
-    <$> identifier
+    <$> anyIdentifier
     <* colon
     <* colon
     <*> methodName
-    <*> parens (commaSep identifier)
+    <*> parens (commaSep anyIdentifier)
 
 objectUncall :: Parser Statement
 objectUncall =
     reserved "uncall"
     >> ObjectUncall
-    <$> identifier
+    <$> anyIdentifier
     <* colon
     <* colon
     <*> methodName
-    <*> parens (commaSep identifier)
+    <*> parens (commaSep anyIdentifier)
 
 objectConstruction :: Parser Statement
 objectConstruction =
     reserved "new"
     >> ObjectConstruction
     <$> typeName
-    <*> identifier
+    <*> anyIdentifier
 
 objectDestruction :: Parser Statement
 objectDestruction =
     reserved "delete"
     >> ObjectDestruction
     <$> typeName
-    <*> identifier
+    <*> anyIdentifier
 
 localBlock :: Parser Statement
 localBlock =
@@ -237,17 +255,17 @@ copyReference :: Parser Statement
 copyReference = 
     reserved "copy"
     >> CopyReference
-    <$> typeName
-    <*> identifier
-    <*> identifier 
+    <$> dataType
+    <*> anyIdentifier
+    <*> anyIdentifier 
 
 unCopyReference :: Parser Statement
 unCopyReference = 
     reserved "uncopy"
     >> UnCopyReference
-    <$> typeName
-    <*> identifier
-    <*> identifier
+    <$> dataType
+    <*> anyIdentifier
+    <*> anyIdentifier
     
 arrayConstruction :: Parser Statement
 arrayConstruction =
@@ -265,7 +283,7 @@ arrayDestruction =
 
 statement :: Parser Statement
 statement = try assign
-        <|> swap
+        <|> try assignArrElem <|> swap
         <|> conditional
         <|> loop
         <|> try localCall
@@ -275,8 +293,7 @@ statement = try assign
         <|> localBlock
         <|> objectBlock 
         <|> try arrayConstruction <|> objectConstruction
-        <|> arrayDestruction
-        <|> objectDestruction
+        <|> try arrayDestruction <|> objectDestruction
         <|> skip
         <|> copyReference
         <|> unCopyReference

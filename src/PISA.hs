@@ -64,6 +64,7 @@ data Macro = Immediate Integer
            | StackOffset
            | InitialMemoryBlockSize
            | ReferenceCounterIndex
+           | ArrayElementOffset
     deriving (Show, Eq)
 
 type MInstruction = GInstr Macro

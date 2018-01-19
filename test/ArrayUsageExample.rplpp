@@ -1,0 +1,87 @@
+class Foo
+    int value
+
+    method set(int x)
+        value += x
+
+class Bar inherits Foo
+    int value2
+
+    method set(int x)
+        value += x
+        value2 += x
+
+    method setTwo(int x, int y)
+        value += x
+        value2 += y          
+
+class Program
+    Foo foo
+    Bar bar
+    Foo[] fooList
+    Bar[] barList
+    int[] intList
+    int[] singleton
+    int length
+
+    method main()
+        length += 5
+
+        // Initialize some objects 
+        // new Foo foo
+        new Bar bar
+        new Foo foo
+
+        // Initialize some arrays
+        new Foo[length] fooList
+        new Bar[length] barList
+        new int[length] intList
+        new int[0] singleton
+
+        // Array destroying
+        delete int[0] singleton
+
+        // Integer cell assignment 
+        intList[0] += 10
+        intList[1] += intList[0]
+        // intList[1] -= intList[1] // Irreversible update error
+        
+        // Object cell assignment
+        new Foo fooList[0]
+        new Foo fooList[1]
+        new Bar fooList[2]      // A Foo[] stores all elements with the Foo base class
+        new Bar barList[0]
+
+        delete Bar barList[0]
+        // new Foo barList[1]   // Type error
+
+        // Reference Copying
+        copy Foo foo fooList[3]
+        copy Foo fooList[3] fooList[4]
+        uncopy Foo foo fooList[3]
+        local Foo[] fooLst = nil 
+        copy Foo[] fooList fooLst
+        uncopy Foo[] fooList fooLst
+        delocal Foo[] fooLst = nil
+
+        // Swap with array cells
+        intList[2] <=> length 
+        fooList[0] <=> foo      // Swap a cell value
+        fooList[1] <=> foo      // Extract formerly assigned cell value
+        fooList[2] <=> bar      // swap bars
+        // fooList[1] <=> bar   // Storing a foo in a bar. Should give runtime error
+
+        length += 3735943886
+
+        // Object calling
+        call fooList[0]::set(intList[2])
+        uncall fooList[0]::set(intList[2])
+        call fooList[0]::set(length)
+        uncall fooList[0]::set(length)
+        call foo::set(intList[2])
+        call bar::setTwo(intList[2], intList[1])
+        // call bar::setTwo(intList[2], intList[2]) // Irreversible update
+        // call fooList::set(length) // Type error
+        // call intList::set(length) // Type error
+
+        

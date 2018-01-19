@@ -30,7 +30,8 @@ data MEState =
         freeListsSize :: Size,
         stackOffset :: Offset,
         initialMemoryBlockSize :: Size,
-        referenceCounterIndex :: Offset
+        referenceCounterIndex :: Offset,
+        arrayElementOffset :: Offset
     } deriving (Show, Eq)
 
 newtype MacroExpander a = MacroExpander { runME :: ReaderT MEState (Except String) a }
@@ -55,7 +56,8 @@ initialState (GProg p) s =
         freeListsSize = 10,
         stackOffset = 16384,
         initialMemoryBlockSize = 1024,
-        referenceCounterIndex = 1
+        referenceCounterIndex = 1,
+        arrayElementOffset = 2
         }
 
     where toPair (a, (Just l, _)) = Just (l, a)
@@ -95,6 +97,7 @@ meMacro FreeListsSize = asks freeListsSize
 meMacro StackOffset = asks stackOffset
 meMacro InitialMemoryBlockSize = asks initialMemoryBlockSize
 meMacro ReferenceCounterIndex = asks referenceCounterIndex
+meMacro ArrayElementOffset = asks arrayElementOffset
 
 -- | Macro instructions
 meInstruction :: MInstruction -> MacroExpander Instruction

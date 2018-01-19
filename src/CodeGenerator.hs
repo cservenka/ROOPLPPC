@@ -29,7 +29,6 @@ data CGState =
         registerIndex :: Integer,
         labelTable :: [(SIdentifier, Label)],
         registerStack :: [(SIdentifier, Register)],
-        freedRegisters :: [Register],
         saState :: SAState
     } deriving (Show, Eq)
 
@@ -38,7 +37,7 @@ newtype CodeGenerator a = CodeGenerator { runCG :: StateT CGState (Except String
 
 
 initialState :: SAState -> CGState
-initialState s = CGState { labelIndex = 0, registerIndex = 6, labelTable = [], registerStack = [], freedRegisters = [], saState = s }
+initialState s = CGState { labelIndex = 0, registerIndex = 6, labelTable = [], registerStack = [], saState = s }
 
 -- | Register containing 0
 registerZero :: Register
@@ -64,30 +63,28 @@ registerFLPs = Reg 4
 registerHP :: Register
 registerHP = Reg 5
 
+-- | Pushes a new register to the register stack
 pushRegister :: SIdentifier -> CodeGenerator Register
-pushRegister i = gets freedRegisters >>= \fr ->
-    case fr of
-        (x:xs) -> do modify $ \s -> s { registerStack = (i, x) : registerStack s, freedRegisters = xs}  
-                     return x
-        [] -> do ri <- gets registerIndex
-                 modify $ \s -> s { registerIndex = 1 + ri, registerStack = (i, Reg ri) : registerStack s }
-                 return $ Reg ri       
+pushRegister i = do ri <- gets registerIndex
+                    modify $ \s -> s { registerIndex = 1 + ri, registerStack = (i, Reg ri) : registerStack s }
+                    return $ Reg ri       
 
+-- | Pop a register from the register stack
 popRegister :: CodeGenerator ()
 popRegister = modify $ \s -> s { registerIndex = (-1) + registerIndex s, registerStack = drop 1 $ registerStack s }
 
-removeRegister :: (SIdentifier, Register) -> CodeGenerator ()
-removeRegister (i, r) = modify $ \s -> s { registerStack = filter (/= (i, r)) (registerStack s), freedRegisters = r : freedRegisters s } 
-
+-- | Reserve a tmp register
 tempRegister :: CodeGenerator Register
 tempRegister =
     do ri <- gets registerIndex
        modify $ \s -> s { registerIndex = 1 + ri }
        return $ Reg ri
 
+-- | Clear reverved tmp register       
 popTempRegister :: CodeGenerator ()
 popTempRegister = modify $ \s -> s { registerIndex = (-1) + registerIndex s }
 
+-- | Lookup register of given identifier
 lookupRegister :: SIdentifier -> CodeGenerator Register
 lookupRegister i = gets registerStack >>= \rs ->
     case lookup i rs of
@@ -136,7 +133,23 @@ loadVariableValue :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MIns
 loadVariableValue n =
     do (ra, la, ua) <- loadVariableAddress n
        rv <- tempRegister
-       return (rv, la ++ [(Nothing, EXCH rv ra)], popTempRegister >> ua)
+       return (rv, la ++ [(Nothing, EXCH rv ra)] ++ invertInstructions la, popTempRegister >> ua)
+
+-- | Returns address an array element  
+loadArrayElementVariableAddress :: SIdentifier -> SExpression -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
+loadArrayElementVariableAddress n e = 
+    do (ra, la, ua) <- loadVariableAddress n
+       (re, le, ue) <- cgExpression e
+       rv <- tempRegister
+       rt <- tempRegister
+       return (rv, la ++ le ++ [(Nothing, EXCH rt ra), (Nothing, XOR rv rt), (Nothing, EXCH rt ra), (Nothing, ADDI rv ArrayElementOffset), (Nothing, ADD rv re)] ++ invertInstructions (la ++ le), popTempRegister >> popTempRegister >> ue >> ua)              
+
+-- | Returns the value of an array element       
+loadArrayElementVariableValue :: SIdentifier -> SExpression -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
+loadArrayElementVariableValue n e = 
+    do (ra, la, ua) <- loadArrayElementVariableAddress n e
+       rv <- tempRegister
+       return (rv, la ++ [(Nothing, EXCH rv ra)] ++ invertInstructions la , popTempRegister >> ua)  
 
 -- | Returns pointer to free list at given index      
 loadFreeListAddress :: Register -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())        
@@ -226,6 +239,7 @@ cgExpression :: SExpression -> CodeGenerator (Register, [(Maybe Label, MInstruct
 cgExpression (Constant 0) = return (registerZero, [], return ())
 cgExpression (Constant n) = tempRegister >>= \rt -> return (rt, [(Nothing, XORI rt $ Immediate n)], popTempRegister)
 cgExpression (Variable i) = loadVariableValue i
+cgExpression (ArrayElement (n, e)) = loadArrayElementVariableValue n e
 cgExpression Nil = return (registerZero, [], return ())
 cgExpression (Binary op e1 e2) =
     do (r1, l1, u1) <- cgExpression e1
@@ -256,19 +270,51 @@ cgAssign n modop e =
           cgModOp ModSub = SUB 
           cgModOp ModXor = XOR
 
-loadForSwap :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
-loadForSwap n = gets (symbolTable . saState) >>= \st ->
+-- | Code generation for assignments
+cgAssignArrElem :: (SIdentifier, SExpression) -> ModOp -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
+cgAssignArrElem (n, e1) modop e2 =
+    do (rt, lt, ut) <- loadArrayElementVariableValue n e1
+       (re, le, ue) <- cgExpression e2
+       l <- getUniqueLabel "assArrElem"
+       ue >> ut
+       return $ lt ++ le ++ [(Just l, cgModOp modop rt re)] ++ invertInstructions (lt ++ le)
+    where cgModOp ModAdd = ADD
+          cgModOp ModSub = SUB 
+          cgModOp ModXor = XOR
+
+-- | Ensures correct loads for swapping 
+loadForSwap :: (SIdentifier, Maybe SExpression) -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
+loadForSwap (n, x) = gets (symbolTable . saState) >>= \st ->
     case lookup n st of
+        (Just (ClassField IntegerArrayType _ _ _)) -> case x of 
+                                                       Just x' -> loadArrayElementVariableValue n x'
+                                                       _ -> loadVariableValue n
+        (Just (ClassField (ObjectArrayType _) _ _ _)) -> case x of 
+                                                        Just x' -> loadArrayElementVariableValue n x'
+                                                        _ -> loadVariableValue n
         (Just ClassField {}) -> loadVariableValue n
         (Just (LocalVariable IntegerType _)) -> loadVariableValue n
         (Just (LocalVariable (ObjectType _) _)) -> loadVariableValue n
         (Just (LocalVariable (CopyType _) _)) -> loadVariableValue n
+        (Just (LocalVariable IntegerArrayType _)) -> case x of 
+                                                       Just x' -> loadArrayElementVariableValue n x'
+                                                       _ -> loadVariableValue n
+        (Just (LocalVariable (ObjectArrayType _) _)) -> case x of 
+                                                        Just x' -> loadArrayElementVariableValue n x'
+                                                        _ -> loadVariableValue n
         (Just (MethodParameter IntegerType _)) -> loadVariableValue n
         (Just (MethodParameter (ObjectType _) _)) -> loadVariableValue n
         (Just (MethodParameter (CopyType _) _)) -> loadVariableValue n
+        (Just (MethodParameter IntegerArrayType _)) -> case x of 
+                                                         Just x' -> loadArrayElementVariableValue n x'
+                                                         _ -> loadVariableValue n
+        (Just (MethodParameter (ObjectArrayType _) _)) -> case x of 
+                                                            Just x' -> loadArrayElementVariableValue n x'
+                                                            _ -> loadVariableValue n 
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
-cgSwap :: SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+-- | Code generation for swaps        
+cgSwap :: (SIdentifier, Maybe SExpression) -> (SIdentifier, Maybe SExpression) -> CodeGenerator [(Maybe Label, MInstruction)]
 cgSwap n1 n2 = if n1 == n2 then return [] else
     do (r1, l1, u1) <- loadForSwap n1
        (r2, l2, u2) <- loadForSwap n2
@@ -317,7 +363,7 @@ cgLoop e1 s1 s2 e2 =
                 [(Just l_test, BNE rt registerZero l_exit)] ++ s2' ++
                 [(Just l_assert, BRA l_entry), (Just l_exit, BRA l_test), (Nothing, XORI rt $ Immediate 1)]
 
--- | Code generation for object blocks
+-- | Code generation for object blocks FIXME: stack allocation order
 cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectBlock tp n stmt =
     do rn <- pushRegister n
@@ -353,20 +399,26 @@ cgLocalBlock n e1 stmt e2 =
        return $ load ++ stmt' ++ clear
 
 -- | Code generation for calls
-cgCall :: [SIdentifier] -> [(Maybe Label, MInstruction)] -> Register -> CodeGenerator [(Maybe Label, MInstruction)]
+cgCall :: [(SIdentifier, Maybe SExpression)] -> [(Maybe Label, MInstruction)] -> Register -> CodeGenerator [(Maybe Label, MInstruction)]
 cgCall args jump this =
-    do (ra, la, ua) <- unzip3 <$> mapM loadVariableAddress args
+    do (ra, la, ua) <- unzip3 <$> mapM loadAddr args
        sequence_ ua
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ (this : ra)
            store = concatMap push $ rr ++ ra ++ [this]
        return $ concat la ++ store ++ jump ++ invertInstructions store ++ invertInstructions (concat la)
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
-
-cgLocalCall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
+          loadAddr (n, e) = 
+            case e of
+                Nothing -> loadVariableAddress n
+                Just e' -> loadArrayElementVariableAddress n e'
+                     
+-- | Code generation for local calling    
+cgLocalCall :: SIdentifier -> [(SIdentifier, Maybe SExpression)]-> CodeGenerator [(Maybe Label, MInstruction)]
 cgLocalCall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, BRA l_m)] registerThis
 
-cgLocalUncall :: SIdentifier -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
+-- | Code generation for local uncalling
+cgLocalUncall :: SIdentifier -> [(SIdentifier, Maybe SExpression)] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgLocalUncall m args = getMethodLabel m >>= \l_m -> cgCall args [(Nothing, RBRA l_m)] registerThis
 
 -- | Returns the type associated with a given identifier
@@ -376,6 +428,9 @@ getType i = gets (symbolTable . saState) >>= \st ->
         (Just (LocalVariable (ObjectType tp) _)) -> return tp
         (Just (ClassField (ObjectType tp) _ _ _)) -> return tp
         (Just (MethodParameter (ObjectType tp) _)) -> return tp
+        (Just (LocalVariable (ObjectArrayType tp) _)) -> return tp
+        (Just (ClassField (ObjectArrayType tp) _ _ _)) -> return tp
+        (Just (MethodParameter (ObjectArrayType tp) _)) -> return tp
         _ -> throwError $ "ICE: Invalid object variable index " ++ show i
 
 -- | Load the return offset for methods
@@ -384,7 +439,6 @@ loadMethodAddress (o, ro) m =
     do rv <- tempRegister
        rt <- tempRegister
        rtgt <- tempRegister
-       popTempRegister >> popTempRegister >> popTempRegister
        offsetMacro <- OffsetMacro <$> getType o <*> pure m
        l <- getUniqueLabel "loadMetAdd"
        let load = [(Just l, EXCH rv ro),
@@ -397,19 +451,27 @@ loadMethodAddress (o, ro) m =
        return (rtgt, load)
 
 -- | Load address or value needed for calls
-loadForCall :: SIdentifier -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
-loadForCall n = gets (symbolTable . saState) >>= \st ->
+loadForCall :: (SIdentifier, Maybe SExpression) -> CodeGenerator (Register, [(Maybe Label, MInstruction)], CodeGenerator ())
+loadForCall (n, e) = gets (symbolTable . saState) >>= \st ->
     case lookup n st of
+        (Just (ClassField (ObjectArrayType _) _ _ _)) -> 
+            case e of 
+                Just x' -> loadArrayElementVariableValue n x'
+                _ -> throwError $ "ICE: Invalid variable index " ++ show n
         (Just ClassField {}) -> loadVariableValue n
         (Just (LocalVariable (ObjectType _) _)) -> loadVariableValue n
         (Just (LocalVariable (CopyType _) _)) -> loadVariableValue n
+        (Just (LocalVariable (ObjectArrayType _) _)) -> 
+            case e of 
+                Just x' -> loadArrayElementVariableValue n x'
+                _ -> throwError $ "ICE: Invalid variable index " ++ show n
         (Just _) -> loadVariableAddress n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
 -- | Code generation for object calls
-cgObjectCall :: SIdentifier -> MethodName -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectCall o m args =
-    do (ro, lo, uo) <- loadForCall o
+cgObjectCall :: (SIdentifier, Maybe SExpression) -> MethodName -> [(SIdentifier, Maybe SExpression)] -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectCall (o, e) m args =
+    do (ro, lo, uo) <- loadForCall (o, e)
        rt <- tempRegister
        (rtgt, loadAddress) <- loadMethodAddress (o, rt) m
        l_jmp <- getUniqueLabel "l_jmp"
@@ -418,14 +480,15 @@ cgObjectCall o m args =
                  (Nothing, NEG rtgt),
                  (Nothing, ADDI rtgt $ AddressMacro l_jmp)]
        call <- cgCall args jp rt
+       popTempRegister >> popTempRegister >> popTempRegister -- rv, rt & rtgt from loadMethod Addr
        popTempRegister >> uo
        let load = lo ++ [(Nothing, XOR rt ro)] ++ loadAddress ++ invertInstructions lo
        return $ load ++ call ++ invertInstructions load
 
 -- | Code generation for object uncalls
-cgObjectUncall :: SIdentifier -> MethodName -> [SIdentifier] -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectUncall o m args =
-    do (ro, lo, uo) <- loadForCall o
+cgObjectUncall :: (SIdentifier, Maybe SExpression) -> MethodName -> [(SIdentifier, Maybe SExpression)] -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectUncall (o, e) m args =
+    do (ro, lo, uo) <- loadForCall (o, e)
        rt <- tempRegister
        (rtgt, loadAddress) <- loadMethodAddress (o, rt) m
        l_jmp <- getUniqueLabel "l_jmp"
@@ -438,14 +501,17 @@ cgObjectUncall o m args =
                  (Just l_rjmp_bot, BRA l_rjmp_top),
                  (Nothing, ADDI rtgt $ AddressMacro l_jmp)]
        call <- cgCall args jp rt
+       popTempRegister >> popTempRegister >> popTempRegister -- rv, rt & rtgt from loadMethod Addr
        popTempRegister >> uo
        let load = lo ++ [(Nothing, XOR rt ro)] ++ loadAddress ++ invertInstructions lo
        return $ load ++ call ++ invertInstructions load
     
 -- | Code generation for object construction
-cgObjectConstruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectConstruction tp n =
-    do (rv, lv, uv) <- loadVariableAddress n
+cgObjectConstruction :: TypeName -> (SIdentifier, Maybe SExpression) -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectConstruction tp (n, e) =
+    do (rv, lv, uv) <- case e of 
+                         Nothing -> loadVariableAddress n
+                         Just e' -> loadArrayElementVariableAddress n e'
        rp <- tempRegister
        rt <- tempRegister
        popTempRegister >> popTempRegister
@@ -467,9 +533,11 @@ cgObjectConstruction tp n =
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]   
 
 -- | Code generation for object destruction
-cgObjectDestruction :: TypeName -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgObjectDestruction tp n =
-    do (rp, la, ua) <- loadVariableValue n
+cgObjectDestruction :: TypeName -> (SIdentifier, Maybe SExpression) -> CodeGenerator [(Maybe Label, MInstruction)]
+cgObjectDestruction tp (n, e) =
+    do (rp, la, ua) <- case e of
+                         Nothing -> loadVariableValue n
+                         Just e' -> loadArrayElementVariableValue n e'
        rt <- tempRegister
        l  <- getUniqueLabel "obj_des"
        popTempRegister >> ua
@@ -484,15 +552,18 @@ cgObjectDestruction tp n =
            store = concatMap push rr
            free = [(Just l, ADDI rt $ SizeMacro tp)] ++ push rt ++ push rp
            lt = l ++ "_top"   
-       return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, BRA "l_free")] ++ invertInstructions (la ++ store ++ free)
+       return $ la ++ removeVtable ++ store ++ free ++ [(Nothing, RBRA "l_malloc")] ++ invertInstructions (la ++ store ++ free)
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
 
--- | TODO: Sanity checks 
-cgCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgCopyReference tp n m = 
-    do (rcp, lp, up) <- loadVariableValue m
-    --    rcp <- pushRegister m
-       (rp, la, ua) <- loadVariableValue n
+-- | Code generation for reference construction
+cgCopyReference :: (SIdentifier, Maybe SExpression) -> (SIdentifier, Maybe SExpression) -> CodeGenerator [(Maybe Label, MInstruction)]
+cgCopyReference (n, e1) (m, e2) = 
+    do (rcp, lp, up) <- case e2 of 
+                          Nothing -> loadVariableValue m
+                          Just e2' -> loadArrayElementVariableValue m e2'
+       (rp, la, ua) <- case e1 of 
+                         Nothing -> loadVariableValue n
+                         Just e1' -> loadArrayElementVariableValue n e1'
        rt <- tempRegister
        up >> ua >> popTempRegister
        l <- getUniqueLabel "copy"
@@ -504,11 +575,15 @@ cgCopyReference tp n m =
                         (Nothing, SUBI rp ReferenceCounterIndex)]
        return $ lp ++ la ++ reference ++ invertInstructions (lp ++ la)
 
--- | -- | TODO: Sanity checks       
-cgUnCopyReference :: TypeName -> SIdentifier -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgUnCopyReference tp n m = 
-    do (rcp, la1, ua1) <- loadVariableValue m
-       (rp, la2, ua2) <- loadVariableValue n
+-- | Code generation for reference destruction  
+cgUnCopyReference :: (SIdentifier, Maybe SExpression) -> (SIdentifier, Maybe SExpression) -> CodeGenerator [(Maybe Label, MInstruction)]
+cgUnCopyReference (n, e1) (m, e2) = 
+    do (rcp, la1, ua1) <- case e2 of 
+                            Nothing -> loadVariableValue m
+                            Just e2' -> loadArrayElementVariableValue m e2'
+       (rp, la2, ua2) <- case e1 of 
+                           Nothing -> loadVariableValue n
+                           Just e1' -> loadArrayElementVariableValue n e1'
        rt <- tempRegister
        l <- getUniqueLabel "uncopy"
        ua1 >> ua2 >> popTempRegister
@@ -518,63 +593,63 @@ cgUnCopyReference tp n m =
                         (Nothing, SUBI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
                         (Nothing, SUBI rp ReferenceCounterIndex)]    
-       removeRegister (m, rcp)                           
+    --    removeRegister (m, rcp)                           
        return $ la1 ++ la2 ++ reference ++ invertInstructions (la1 ++ la2) 
 
--- TODO: FIX       
-cgArrayConstruction :: TypeName -> Integer -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgArrayConstruction tp size n =
+-- | Code generation for array construction       
+cgArrayConstruction :: SExpression -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgArrayConstruction e n =
     do (ra, la, ua) <- loadVariableAddress n
+       (re, le, ue) <- cgExpression e
        rp <- tempRegister
        rt <- tempRegister
-       ua >> popTempRegister >> popTempRegister
+       popTempRegister >> popTempRegister
        l  <- getUniqueLabel "arr_con"
        rs <- gets registerStack
        let rr = (registerThis : map snd rs) \\ [rp, rt]
-           store = concatMap push rr
-           malloc = [(Just l, ADDI rt $ Immediate $ 1 + 2)] ++ push rt ++ push rp
+           store = le ++ [(Just l, ADDI rt ArrayElementOffset), (Nothing, ADD rt re)] ++ invertInstructions le ++ concatMap push rr
+           malloc = push rt ++ push rp 
            lb = l ++ "_bot"
-           initArray = la ++
-                       [(Nothing, XORI rt $ Immediate 0), 
+           initArray = la ++ le ++
+                       [(Nothing, XOR rt re), 
                         (Nothing, EXCH rt rp),
                         (Nothing, ADDI rp ReferenceCounterIndex),
                         (Nothing, XORI rt $ Immediate 1),
                         (Nothing, EXCH rt rp),
-                        (Just lb, SUBI rp ReferenceCounterIndex),
-                        (Nothing, EXCH rp ra)] ++
-                       invertInstructions la 
-       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions (malloc ++ store) ++ initArray
+                        (Nothing, SUBI rp ReferenceCounterIndex),
+                        (Just lb, EXCH rp ra)] ++
+                       invertInstructions (la ++ le)
+       ue >> ua                       
+       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions (store ++ malloc) ++ initArray
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)] 
 
--- TODO: FIX    
-cgArrayDestruction :: TypeName -> Integer -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
-cgArrayDestruction tp size n =
-    do (ra, la, ua) <- loadVariableAddress n
-       rp <- tempRegister
+-- | Code generation for array destruction
+cgArrayDestruction :: SExpression -> SIdentifier -> CodeGenerator [(Maybe Label, MInstruction)]
+cgArrayDestruction e n =
+    do (rp, lp, up) <- loadVariableValue n
+       (re, le, ue) <- cgExpression e
        rt <- tempRegister
-       ua >> popTempRegister >> popTempRegister
-       l  <- getUniqueLabel "arr_con"
+       l  <- getUniqueLabel "obj_des"
+       popTempRegister >> ue >> up
        rs <- gets registerStack
-       let rr = (registerThis : map snd rs) \\ [rp, rt]
+       let removeArray = [(Just lt, EXCH rt rp),
+                          (Nothing, XOR rt re),
+                          (Nothing, ADDI rp ReferenceCounterIndex),
+                          (Nothing, EXCH rt rp),
+                          (Nothing, XORI rt $ Immediate 1),
+                          (Nothing, SUBI rp ReferenceCounterIndex)]
+           rr = (registerThis : map snd rs) \\ [rp, rt]
            store = concatMap push rr
-           malloc = [(Just l, ADDI rt $ Immediate $ 1 + 2)] ++ push rt ++ push rp
-           lb = l ++ "_bot"
-           initArray = la ++
-                       [(Nothing, XORI rt $ Immediate 0), 
-                        (Nothing, EXCH rt rp),
-                        (Nothing, ADDI rp ReferenceCounterIndex),
-                        (Nothing, XORI rt $ Immediate 1),
-                        (Nothing, EXCH rt rp),
-                        (Just lb, SUBI rp ReferenceCounterIndex),
-                        (Nothing, EXCH rp ra)] ++
-                       invertInstructions la 
-       return $ store ++ malloc ++ [(Nothing, BRA "l_malloc")] ++ invertInstructions (malloc ++ store) ++ initArray
-    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]    
+           free = [(Just l, ADDI rt ArrayElementOffset), (Nothing, ADD rt re)] ++ push rt ++ push rp
+           lt = l ++ "_top"   
+       return $ lp ++ le ++ removeArray ++ store ++ free ++ [(Nothing, RBRA "l_malloc")] ++ invertInstructions (lp ++ le ++ store ++ free)
+    where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]   
 
 -- | Code generation for statements
 cgStatement :: SStatement -> CodeGenerator [(Maybe Label, MInstruction)]
 cgStatement (Assign n modop e) = cgAssign n modop e
-cgStatement (Swap n1 n2) = cgSwap n1 n2
+cgStatement (AssignArrElem (n, e1) modop e2) = cgAssignArrElem (n, e1) modop e2
+cgStatement (Swap (n1, e1) (n2, e2)) = cgSwap (n1, e1) (n2, e2)
 cgStatement (Conditional e1 s1 s2 e2) = cgConditional e1 s1 s2 e2
 cgStatement (Loop e1 s1 s2 e2) = cgLoop e1 s1 s2 e2
 cgStatement (ObjectBlock tp n stmt) = cgObjectBlock tp n stmt
@@ -586,10 +661,10 @@ cgStatement (ObjectUncall o m args) = cgObjectUncall o m args
 cgStatement (ObjectConstruction tp n) = cgObjectConstruction tp n
 cgStatement (ObjectDestruction tp n)  = cgObjectDestruction tp n
 cgStatement Skip = return []
-cgStatement (CopyReference tp n m) = cgCopyReference tp n m
-cgStatement (UnCopyReference tp n m)  = cgUnCopyReference tp n m
-cgStatement (ArrayConstruction (tp, v) n) = cgArrayConstruction tp v n
-cgStatement (ArrayDestruction (tp, v) n) = cgArrayDestruction tp v n
+cgStatement (CopyReference _ n m) = cgCopyReference n m
+cgStatement (UnCopyReference _ n m)  = cgUnCopyReference n m
+cgStatement (ArrayConstruction (_, e) n) = cgArrayConstruction e n
+cgStatement (ArrayDestruction (_, e) n) = cgArrayDestruction e n
 
 -- | Code generation for methods
 cgMethod :: (TypeName, SMethodDeclaration) -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -752,31 +827,6 @@ cgMalloc =
        return malloc    
     where pop r = [(Nothing, ADDI registerSP $ Immediate 1), (Nothing, EXCH r registerSP)]
           push r = invertInstructions (pop r)                            
-       
-cgFree :: CodeGenerator [(Maybe Label, MInstruction)]
-cgFree = 
-    do rp <- tempRegister -- Pointer to new obj
-       ros <- tempRegister -- Object size
-       rc  <- tempRegister -- Free list index
-       rs  <- tempRegister -- Current cell size
-       popTempRegister >> popTempRegister >> popTempRegister >> popTempRegister
-       let malloc = [(Just "l_free_top", BRA "l_free_bot")]
-                    ++
-                    [(Just "l_free", SWAPBR registerRO),
-                     (Nothing, NEG registerRO),
-                     (Nothing, ADDI rs $ Immediate 2),
-                     (Nothing, XOR rc registerZero)]
-                    ++ concatMap pop [rp, ros]
-                    ++ push registerRO ++
-                    [(Nothing, RBRA "l_malloc1")]
-                    ++ pop registerRO
-                    ++ concatMap push [ros, rp] ++
-                    [(Nothing, XOR rc registerZero),
-                     (Nothing, SUBI rs $ Immediate 2),
-                     (Just "l_free_bot", BRA "l_free_top")]        
-       return malloc    
-    where pop r = [(Nothing, ADDI registerSP $ Immediate 1), (Nothing, EXCH r registerSP)]
-          push r = invertInstructions (pop r)
    
 -- | Code generation for virtual tables
 cgVirtualTables :: CodeGenerator [(Maybe Label, MInstruction)]
@@ -805,7 +855,6 @@ getFields tp =
            Nothing -> throwError $ "ICE: Unknown class " ++ tp
 
 -- | Code generation for output
--- | FIXME: Output
 cgOutput :: TypeName -> CodeGenerator ([(Maybe Label, MInstruction)], [(Maybe Label, MInstruction)])
 cgOutput tp =
     do mfs <- getFields tp
@@ -824,12 +873,11 @@ cgOutput tp =
                              SUBI registerSP $ Immediate o]
                  return $ zip (repeat Nothing) copy
 
--- | Generates code for the program entry point
+-- | Generates code for the program entry point FIXME: main object allocing
 cgProgram :: SProgram -> CodeGenerator PISA.MProgram
 cgProgram p =
     do vt <- cgVirtualTables
        malloc <- cgMalloc
-       free   <- cgFree
        malloc1 <- cgMalloc1
        rv <- tempRegister -- V table register
        rb <- tempRegister -- Memory block register
@@ -872,7 +920,7 @@ cgProgram p =
                  (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
                  (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer
                  (Just "finish", FINISH)]
-       return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ malloc ++ free ++ malloc1 ++ ms ++ mn
+       return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ malloc ++ malloc1 ++ ms ++ mn
 
 
 -- | Generates code for a program

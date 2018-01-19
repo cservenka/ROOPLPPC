@@ -128,6 +128,10 @@ saExpression :: Expression -> ScopeAnalyzer SExpression
 saExpression (Constant v) = pure $ Constant v
 saExpression (Variable n) = Variable <$> saLookup n
 saExpression Nil = pure Nil
+saExpression (ArrayElement (n, e)) = 
+    do n' <- saLookup n
+       e' <- saExpression e
+       return $ ArrayElement (n', e')
 saExpression (Binary binop e1 e2) =
     Binary binop
     <$> saExpression e1
@@ -143,12 +147,18 @@ saStatement s =
             <$> saLookup n
             <*> pure modop
             <*> saExpression e
+
+        (AssignArrElem (n, e1) modop e2) ->
+            when (elem (n, e1) $ varArr e2) (throwError "Irreversible variable assignment")
+            >> AssignArrElem
+            <$> saArrayCell n e1
+            <*> pure modop
+            <*> saExpression e2
         
-        -- TODO: Swap ownership 
-        (Swap n1 n2) ->
+        (Swap (n1, e1) (n2, e2)) ->
             Swap
-            <$> saLookup n1
-            <*> saLookup n2
+            <$> maybeArrayCell n1 e1
+            <*> maybeArrayCell n2 e2
     
         (Conditional e1 s1 s2 e2) ->
             Conditional
@@ -183,29 +193,31 @@ saStatement s =
             <$> saLookup m
             <*> localCall m args
                         
-        (ObjectCall o m args) ->
-            when (args /= nub args || o `elem` args) (throwError $ "Irreversible invocation of method " ++ m)
-            >> ObjectCall
-            <$> saLookup o
-            <*> pure m
-            <*> mapM saLookup args
+        (ObjectCall (o, e) m args) ->
+            do when (args /= nub args || (o, e) `elem` args) (throwError $ "Irreversible invocation of method " ++ m)
+               >> ObjectCall
+               <$> maybeArrayCell o e
+               <*> pure m
+               <*> saArgs args
 
-        (ObjectUncall o m args) ->
-            when (args /= nub args || o `elem` args) (throwError $ "Irreversible invocation of method " ++ m)
+        (ObjectUncall (o, e) m args) ->
+            when (args /= nub args || (o, e) `elem` args) (throwError $ "Irreversible invocation of method " ++ m)
             >> ObjectUncall
-            <$> saLookup o
+            <$> maybeArrayCell o e
             <*> pure m
-            <*> mapM saLookup args
+            <*> saArgs args
 
-        (ObjectConstruction tp n) ->
+        (ObjectConstruction tp (n, e)) ->
             do n' <- saLookup n
+               e' <- mapM saExpression e
                saInsertOwner n'
-               return $ ObjectConstruction tp n'
+               return $ ObjectConstruction tp (n', e')
         
-        (ObjectDestruction tp n) ->
-            do saRemoveOwner n
-               n' <- saLookup n
-               return $ ObjectDestruction tp n'
+        (ObjectDestruction tp (n, e)) ->
+            saRemoveOwner n
+            >> ObjectDestruction
+            <$> pure tp
+            <*> maybeArrayCell n e
 
         (ObjectBlock tp n stmt) ->
             do enterScope
@@ -216,42 +228,66 @@ saStatement s =
 
         Skip -> pure Skip
         
-        (CopyReference tp n m) ->
-            do n' <- saLookup n
-               m' <- saUpdate (LocalVariable (CopyType tp) m) m
-            --    saInsertOwnership n m
-               return $ CopyReference tp n' m'
+        (CopyReference tp (n, e1) (m, e2)) ->
+            CopyReference
+            <$> pure tp
+            <*> maybeArrayCell n e1
+            <*> maybeArrayCell m e2
         
-        (UnCopyReference tp n m) ->
-            do n' <- saLookup n
-            --    saRemoveOwnership n m
-               m' <- saUpdate (LocalVariable (ObjectType tp) m) m
-               return $ UnCopyReference tp n' m'
+        (UnCopyReference tp (n, e1) (m, e2)) ->
+            UnCopyReference
+            <$> pure tp
+            <*> maybeArrayCell n e1
+            <*> maybeArrayCell m e2
 
-        (ArrayConstruction (tp, v) n) ->
+        (ArrayConstruction (tp, e) n) ->
             do n' <- saLookup n
-               return $ ArrayConstruction (tp, v) n'
+               e' <- saExpression e
+               return $ ArrayConstruction (tp, e') n'
         
-        (ArrayDestruction (tp, v) n) -> 
+        (ArrayDestruction (tp, e) n) -> 
             do n' <- saLookup n
-               return $ ArrayDestruction (tp, v) n'       
+               e' <- saExpression e
+               return $ ArrayDestruction (tp, e') n'       
                 
     where var (Variable n) = [n]
           var (Binary _ e1 e2) = var e1 ++ var e2
           var _ = []
+
+          varArr (ArrayElement (n, e)) = [(n, e)]
+          varArr _ = []
 
           isCF ClassField{} = True
           isCF _ = False
 
           rlookup = flip lookup
 
-          localCall :: MethodName -> [Identifier] -> ScopeAnalyzer [SIdentifier]
+          localCall :: MethodName -> [(Identifier, Maybe Expression)] -> ScopeAnalyzer [(SIdentifier, Maybe SExpression)]
           localCall m args =
             do when (args /= nub args) (throwError $ "Irreversible invocation of method " ++ m)
-               args' <- mapM saLookup args
+               args' <- saArgs args
                st <- gets symbolTable
-               when (any isCF $ mapMaybe (rlookup st) args') (throwError $ "Irreversible invocation of method " ++ m)
+               when (any isCF $ mapMaybe (rlookup st . fst) args') (throwError $ "Irreversible invocation of method " ++ m)
                return args'
+
+          saArgs :: [(Identifier, Maybe Expression)] -> ScopeAnalyzer [(SIdentifier, Maybe SExpression)]
+          saArgs args = 
+            do (ns, es) <- pure $ unzip args
+               ns' <- mapM saLookup ns
+               es' <- mapM (mapM saExpression) es
+               return $ zip ns' es'
+
+          maybeArrayCell :: Identifier -> Maybe Expression -> ScopeAnalyzer (SIdentifier, Maybe SExpression)
+          maybeArrayCell n e =
+            do n' <- saLookup n
+               e' <- mapM saExpression e
+               return (n', e')
+               
+          saArrayCell :: Identifier -> Expression -> ScopeAnalyzer (SIdentifier, SExpression)
+          saArrayCell n e =
+            do n' <- saLookup n
+               e' <- saExpression e
+               return (n', e')     
 
 -- | Set the main method in the Scope Analyzer state
 setMainMethod :: SIdentifier -> ScopeAnalyzer ()
@@ -308,7 +344,7 @@ saClass offset pids (GCDecl c _ fs ms) =
        ms'' <- mapM saMethod $ zip (repeat c) ms
        leaveScope
        return $ ms' ++ ms''
-    where insertClassField (o, GDecl tp n) = traceShow (o, tp, n) saInsert (ClassField tp n c o) n
+    where insertClassField (o, GDecl tp n) = saInsert (ClassField tp n c o) n
           insertMethod (GMDecl n ps _) = saInsert (Method (map getType ps) n) n >>= getMethodName
           getType (GDecl tp _) = tp
 

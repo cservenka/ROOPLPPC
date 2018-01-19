@@ -3,9 +3,11 @@
 module TypeChecker (typeCheck) where
 
 import Data.List
+import Data.Maybe
 
 import Control.Monad.Reader
 import Control.Monad.Except
+import Control.Exception
 
 import Debug.Trace (trace, traceShow)
 
@@ -45,8 +47,17 @@ getDynamicParameterTypes n m = getClassMethods n >>= \ms ->
         Nothing -> throwError $ "Class " ++ n ++ " does not support method " ++ m
         (Just (GMDecl _ ps _)) -> return $ map (\(GDecl tp _) -> tp) ps
 
-checkCall :: [SIdentifier] -> [DataType] -> TypeChecker ()
-checkCall args ps = when (la /= lp) (throwError err) >> mapM getType args >>= \as -> mapM_ checkArgument (zip as ps)
+getArrayType :: DataType -> DataType
+getArrayType tp = case tp of
+                    IntegerArrayType -> IntegerType
+                    ObjectArrayType t -> ObjectType t       
+
+checkCall :: [(SIdentifier, Maybe SExpression)] -> [DataType] -> TypeChecker ()
+checkCall args ps = 
+    when (la /= lp) (throwError err)
+    >> mapM (mapM tcExpression . snd) args 
+    >> mapM (getType . fst) args
+    >>= \as -> mapM_ checkArgument (zip as ps)
     where la = length args
           lp = length ps
           err = "Passed " ++ show la ++ " argument(s) to method expecting " ++ show lp ++ " argument(s)"
@@ -54,12 +65,24 @@ checkCall args ps = when (la /= lp) (throwError err) >> mapM getType args >>= \a
 checkArgument :: (DataType, DataType) -> TypeChecker ()
 checkArgument (ObjectType ca, ObjectType cp) = asks (superClasses . caState) >>= \sc ->
     unless (ca == cp || maybe False (elem cp) (lookup ca sc)) (throwError $ "Class " ++ ca ++ " not a subtype of class " ++ cp)
+checkArgument (ObjectType ca, ObjectArrayType cp) = asks (superClasses . caState) >>= \sc ->
+    unless (ca == cp || maybe False (elem cp) (lookup ca sc)) (throwError $ "Class " ++ ca ++ " not a subtype of class " ++ cp)
+checkArgument (ObjectArrayType ca, ObjectType cp) = asks (superClasses . caState) >>= \sc ->
+    unless (ca == cp || maybe False (elem cp) (lookup ca sc)) (throwError $ "Class " ++ ca ++ " not a subtype of class " ++ cp)
+checkArgument (IntegerArrayType, tp) = expectType (getArrayType IntegerArrayType) tp
+checkArgument (ta, IntegerArrayType) = expectType (getArrayType IntegerArrayType) ta       
 checkArgument (ta, tp) = expectType tp ta
 
 tcExpression :: SExpression -> TypeChecker DataType
 tcExpression (Constant _) = pure IntegerType
 tcExpression (Variable n) = getType n
 tcExpression Nil = pure NilType
+tcExpression (ArrayElement (n, e)) =
+    do t <- getType n
+       expectType ArrayType t
+       e' <- tcExpression e
+       expectType IntegerType e'
+       return $ getArrayType t
 tcExpression (Binary binop e1 e2)
     | binop == Eq || binop == Neq =
         do t1 <- tcExpression e1
@@ -82,10 +105,20 @@ tcStatement s =
             >> tcExpression e
             >>= expectType IntegerType
 
-        (Swap n1 n2) ->
+        (AssignArrElem (n, e1) _ e2) ->
+            getType n
+            >>= expectType IntegerArrayType
+            >> tcExpression e1
+            >>= expectType IntegerType
+            >> tcExpression e2
+            >>= expectType IntegerType
+
+        (Swap (n1, e1) (n2, e2)) ->
             do t1 <- getType n1
-               t2 <- getType n2
-               expectType t1 t2
+               t2 <- getType n2 
+               if isNothing e1 /= isNothing e2 
+                 then catchError (checkArgument (t1, t2)) (\_ -> checkArgument (t2, t1))
+                 else expectType (if isNothing e1 then t1 else getArrayType t1) (if isNothing e2 then t2 else getArrayType t2)
 
         (Conditional e1 s1 s2 e2) ->
             tcExpression e1
@@ -109,14 +142,10 @@ tcStatement s =
         (LocalBlock t n e1 stmt e2) ->
             getType n
             >> tcExpression e1
-            >>= case t of
-                IntegerType -> expectType IntegerType
-                _ -> expectType NilType
+            >>= expectType (if t == IntegerType then IntegerType else NilType)
             >> mapM_ tcStatement stmt
             >> tcExpression e2
-            >>= case t of
-                IntegerType -> expectType IntegerType
-                _ -> expectType NilType
+            >>= expectType (if t == IntegerType then IntegerType else NilType)
 
         (LocalCall m args) ->
             getParameterTypes m
@@ -126,58 +155,81 @@ tcStatement s =
             getParameterTypes m
             >>= checkCall args
 
-        (ObjectCall o m args) ->
+        (ObjectCall (o, e) m args) ->
             do t <- getType o
+               e' <- mapM tcExpression e
                case t of
                    (ObjectType tn) -> getDynamicParameterTypes tn m >>= checkCall args
+                   (ObjectArrayType tn) -> 
+                    case e' of
+                        Nothing -> throwError $ "Non-object type " ++ show t ++ " does not support method invocation"
+                        _ -> getDynamicParameterTypes tn m >>= checkCall args
                    _ -> throwError $ "Non-object type " ++ show t ++ " does not support method invocation"
 
-        (ObjectUncall o m args) ->
+        (ObjectUncall (o, e) m args) ->
             do t <- getType o
+               e' <- mapM tcExpression e
                case t of
                    (ObjectType tn) -> getDynamicParameterTypes tn m >>= checkCall args
+                   (ObjectArrayType tn) -> 
+                    case e' of
+                        Nothing -> throwError $ "Non-object type " ++ show t ++ " does not support method invocation"
+                        _ -> getDynamicParameterTypes tn m >>= checkCall args
                    _ -> throwError $ "Non-object type " ++ show t ++ " does not support method invocation"
 
         Skip -> pure ()
 
-        (ObjectConstruction _ _) -> pure ()
-
-        (ObjectDestruction tp n) ->
+        (ObjectConstruction tp (n, e)) ->
             do t <- getType n
-               when (t /= ObjectType tp) (throwError $ "Passed type " ++ show tp ++ " does not match the argument types: " ++ show t)
+               e' <- mapM tcExpression e
+               case e' of 
+                 Nothing -> expectType t (ObjectType tp)
+                 _       -> checkArgument (ObjectType tp, t)
+        
+        (ObjectDestruction tp (n, e)) ->
+            do t <- getType n
+               _ <- mapM tcExpression e
                case t of 
                 (ObjectType _) -> expectType t (ObjectType tp)
+                (ObjectArrayType _) -> checkArgument (ObjectType tp, t)
                 _ -> throwError $ "Expected type: " ++ show (ObjectType tp) ++ " Actual type: " ++ show t
         
         -- Allow copying with a copy type        
-        CopyReference _ n _ ->
-            do t <- getType n
-               case t of
-                (ObjectType _) -> pure ()
-                _ -> throwError $ "Non-object type " ++ show t ++ " does not support reference copying" 
-        
-        -- Allow uncopying with two identical copies        
-        UnCopyReference tp n m ->
+        CopyReference _ (n, e1) (m, e2) ->
             do t1 <- getType n
                t2 <- getType m
-               when (t1 /= ObjectType tp && t2 /= CopyType tp) (throwError $ "Passed type " ++ show tp ++ " does not match the arguments types: " ++ show t1 ++ ", " ++ show t2)
-               case (t1, t2) of
-                (ObjectType _, CopyType _) -> expectType t1 t2 
-                _ -> pure ()
-                -- _ -> throwError $ "Expected variables with types (" ++ show (ObjectType tp) ++ ", " ++ show (CopyType tp) ++ "). Actual Types given: (" ++ show t1 ++ ", " ++ show t2 ++ ")"
+               e1' <- mapM tcExpression e1
+               e2' <- mapM tcExpression e2
+               when (t1 == IntegerType || t2 == IntegerType) (throwError "Integer types does not support reference copying")
+               if isNothing e1 /= isNothing e2 
+                 then catchError (checkArgument (t1, t2)) (\_ -> checkArgument (t2, t1))
+                 else expectType (if isNothing e1 then t1 else getArrayType t1) (if isNothing e2 then t2 else getArrayType t2)
+        
+        -- Allow uncopying with two identical copies
+        UnCopyReference _ (n, e1) (m, e2) ->
+            do t1 <- getType n
+               t2 <- getType m
+               e1' <- mapM tcExpression e1
+               e2' <- mapM tcExpression e2
+               when (t1 == IntegerType || t2 == IntegerType) (throwError "Integer types does not support reference copying")
+               if isNothing e1 /= isNothing e2 
+                 then catchError (checkArgument (t1, t2)) (\_ -> checkArgument (t2, t1))
+                 else expectType (if isNothing e1 then t1 else getArrayType t1) (if isNothing e2 then t2 else getArrayType t2)
 
-        -- TODO: fix        
-        (ArrayConstruction (tp, _) n) -> 
-            do t2 <- getType n
+           
+        (ArrayConstruction (tp, e) n) -> 
+            do t <- getType n
+               _ <- tcExpression e
                case tp of
-                 "int" -> expectType t2 IntegerArrayType
-                 _     -> expectType t2 (ObjectArrayType tp) 
+                 "int" -> expectType t IntegerArrayType
+                 _     -> expectType t (ObjectArrayType tp) 
 
-        (ArrayDestruction (tp, _) n) -> 
-            do t2 <- getType n
+        (ArrayDestruction (tp, e) n) -> 
+            do t <- getType n
+               _ <- tcExpression e
                case tp of
-                 "int" -> expectType t2 IntegerArrayType
-                 _     -> expectType t2 (ObjectArrayType tp)         
+                 "int" -> expectType t IntegerArrayType
+                 _     -> checkArgument (ObjectArrayType tp, t)         
                
 getMethodName :: SIdentifier -> TypeChecker Identifier
 getMethodName i = asks symbolTable >>= \st ->

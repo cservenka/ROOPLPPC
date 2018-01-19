@@ -10,9 +10,10 @@ type MethodName = String
 data DataType = IntegerType
               | ObjectType TypeName
               | CopyType TypeName
-              -- | ArrayType (TypeName, Expression)
               | ObjectArrayType TypeName
               | IntegerArrayType
+              | ArrayType
+              | ArrayElementType
               | NilType
   deriving (Show)
 
@@ -23,15 +24,15 @@ instance Eq DataType where
   NilType == NilType = True
   NilType == (ObjectType _) = True
   (ObjectType _) == NilType = True
-  NilType == (ObjectArrayType _) = True
-  (ObjectArrayType _) == NilType = True
   (ObjectType t1) == (ObjectType t2) = t1 == t2
   (CopyType t1) == (CopyType t2) = t1 == t2
   (ObjectArrayType t1) == (ObjectArrayType t2) = t1 == t2
   (CopyType t1) == (ObjectType t2) = t1 == t2
   (ObjectType t1) == (CopyType t2) = t1 == t2
-  (CopyType t1) == (ObjectArrayType t2) = t1 == t2
-  (ObjectArrayType t1) == (CopyType t2) = t1 == t2
+  ArrayType == (ObjectArrayType _) = True
+  (ObjectArrayType _) == ArrayType = True
+  ArrayType == IntegerArrayType = True
+  IntegerArrayType == ArrayType = True
   _ == _ = False
 
 -- Binary Operators
@@ -62,27 +63,29 @@ data ModOp = ModAdd
 --Expressions
 data GExpr v = Constant Integer
              | Variable v
+             | ArrayElement (v, GExpr v)
              | Nil
              | Binary BinOp (GExpr v) (GExpr v)
   deriving (Show, Eq)
 
 --Statements
 data GStmt m v = Assign v ModOp (GExpr v)
-               | Swap v v
+               | AssignArrElem (v, GExpr v) ModOp (GExpr v)
+               | Swap (v, Maybe (GExpr v)) (v, Maybe (GExpr v))
                | Conditional (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
                | Loop (GExpr v) [GStmt m v] [GStmt m v] (GExpr v)
                | ObjectBlock TypeName v [GStmt m v]
                | LocalBlock DataType v (GExpr v) [GStmt m v] (GExpr v)
-               | LocalCall m [v]
-               | LocalUncall m [v]
-               | ObjectCall v MethodName [v]
-               | ObjectUncall v MethodName [v]
-               | ObjectConstruction TypeName v
-               | ObjectDestruction TypeName v
-               | CopyReference TypeName v v
-               | UnCopyReference TypeName v v
-               | ArrayConstruction (TypeName, Integer) v 
-               | ArrayDestruction (TypeName, Integer) v 
+               | LocalCall m [(v, Maybe (GExpr v))]
+               | LocalUncall m [(v, Maybe (GExpr v))]
+               | ObjectCall (v, Maybe (GExpr v)) MethodName [(v, Maybe (GExpr v))]
+               | ObjectUncall (v, Maybe (GExpr v)) MethodName [(v, Maybe (GExpr v))]
+               | ObjectConstruction TypeName (v, Maybe (GExpr v))
+               | ObjectDestruction TypeName (v, Maybe (GExpr v))
+               | CopyReference DataType (v, Maybe (GExpr v)) (v, Maybe (GExpr v))
+               | UnCopyReference DataType (v, Maybe (GExpr v)) (v, Maybe (GExpr v))
+               | ArrayConstruction (TypeName, GExpr v) v 
+               | ArrayDestruction (TypeName, GExpr v) v 
                | Skip
   deriving (Show, Eq)
 
@@ -95,7 +98,7 @@ data GMDecl m v = GMDecl m [GDecl v] [GStmt m v]
   deriving (Show, Eq)
 
 --Class: Name, fields, methods
-data GCDecl m v = GCDecl TypeName (Maybe TypeName)  [GDecl v] [GMDecl m v]
+data GCDecl m v = GCDecl TypeName (Maybe TypeName) [GDecl v] [GMDecl m v]
   deriving (Show, Eq)
 
 --Program
