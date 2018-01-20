@@ -172,12 +172,12 @@ class RTM
 
     method simulate() 
         from state = Qs do
-            call tapeHead::getSymbol(symbol)      // Fetch current symbol 
+            call tapeHead::getSymbol(symbol)    // Fetch current symbol 
             call inst()
-            uncall tapeHead::getSymbol(symbol)    // Zero-clear symbol
-            pc += 1                               // Increment pc
+            uncall tapeHead::getSymbol(symbol)  // Zero-clear symbol
+            pc += 1                             // Increment pc
 
-            if pc = PC_MAX then                   // Reset pc 
+            if pc = PC_MAX then                 // Reset pc 
                 pc ^= PC_MAX
             else skip
             fi pc = 0
@@ -185,19 +185,19 @@ class RTM
         until state = Qf
  
     method inst()
-        if state = q1[pc] & symbol = s1[pc] then   // Symbol rule:
+        if state = q1[pc] & symbol = s1[pc] then    // Symbol rule:
             state += q2[pc]-q1[pc]                  // set state to q2[pc]
             symbol += s2[pc]-s1[pc]                 // set symbol to s2[pc]
         else skip
         fi state = q2[pc] & symbol = s2[pc] 
-        if state = q1[pc] & s1[pc] = SLASH then    // Move rule:
-            state += q2[pc]-q1[pc]                 // set state to q2[pc] 
+        if state = q1[pc] & s1[pc] = SLASH then     // Move rule:
+            state += q2[pc]-q1[pc]                  // set state to q2[pc] 
             if s2[pc] = RIGHT then  
-                call moveRight()    // Move tape head right
+                call moveRight()                    // Move tape head right
             else skip 
             fi s2[pc] = RIGHT   
             if s2[pc] = LEFT then   
-                uncall moveRight()  // Move tape head left
+                uncall moveRight()                  // Move tape head left
             else skip
             fi s2[pc] = LEFT
         else skip
@@ -234,18 +234,18 @@ class RTM
             call tapeHead::getSymbol(symbol) // Get symbol of new tape head
         fi right = nil
 
-        uncall tapeHead::getRight(right)    // Set right neighbour
+        uncall tapeHead::getRight(right)     // Set right neighbour
         delocal Cell right = nil
         delocal Cell tmp = nil
 
-// This program contains a RTM implementing 
-// incrementation of a non-negative n-bit binary number by 1 (modulo 2n). 
 
-// The tape is initialized with | b | 1 | 1 | 0 | 0 | and after execution,
-// the tape is left with | b | 0 | 0 | 1 | 1 |
 class Program
     RTM bni 
 
     method main()
+        // This program contains a RTM implementing 
+        // incrementation of a non-negative n-bit binary number by 1 (modulo 2n). 
+        // The tape is initialized with | b | 1 | 1 | 0 | 0 | and after execution,
+        // the tape is left with | b | 0 | 0 | 1 | 1 |
         new RTM bni
         call bni::init()
