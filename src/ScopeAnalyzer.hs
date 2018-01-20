@@ -26,7 +26,6 @@ data SAState =
         symbolTable :: SymbolTable,
         scopeStack :: [Scope],
         virtualTables :: [(TypeName, [SIdentifier])],
-        ownershipTable :: [(SIdentifier, [SIdentifier])],
         caState :: CAState,
         mainMethod :: SIdentifier
     } deriving (Show, Eq)
@@ -35,7 +34,7 @@ newtype ScopeAnalyzer a = ScopeAnalyzer { runSA :: StateT SAState (Except String
     deriving (Functor, Applicative, Monad, MonadState SAState, MonadError String)
 
 initialState :: CAState -> SAState
-initialState s = SAState { symbolIndex = 0, symbolTable = [], scopeStack = [], virtualTables = [], ownershipTable = [], caState = s, mainMethod = 0 }
+initialState s = SAState { symbolIndex = 0, symbolTable = [], scopeStack = [], virtualTables = [], caState = s, mainMethod = 0 }
 
 -- | Add an empty scope to the scope stack
 enterScope :: ScopeAnalyzer ()
@@ -66,62 +65,14 @@ saInsert sym n =
        i <- gets symbolIndex
        modify $ \s -> s { symbolTable = (i, sym) : symbolTable s, symbolIndex = 1 + i }
        addToScope (n, i)
-       return i
-
-saUpdate :: Symbol -> Identifier -> ScopeAnalyzer SIdentifier
-saUpdate sym n = 
-    do ts <- topScope
-       i <- saLookup n
-       when (isNothing $ lookup n ts) (throwError $ "Unknown symbol: " ++ n)
-       modify $ \s -> s { symbolTable = (i, sym) : filter (\(x, _) -> i /= x) (symbolTable s) }
-       return i       
+       return i     
 
 -- | Looks up an identifier in the scope
 saLookup :: Identifier -> ScopeAnalyzer SIdentifier
 saLookup n = gets scopeStack >>= \ss ->
     case listToMaybe $ mapMaybe (lookup n) ss of
         Nothing -> throwError $ "Undeclared symbol: " ++ n
-        Just i -> return i
-
--- | Inserts a new owner into the ownership table        
-saInsertOwner :: SIdentifier -> ScopeAnalyzer ()
-saInsertOwner n = gets ownershipTable >>= \ost -> 
-    case lookup n ost of
-        Nothing -> modify $ \s -> s { ownershipTable = (n, []) : ownershipTable s }
-        Just _ -> pure ()
-        -- Just _  -> throwError $ "ICE: " ++ show n ++ show ost ++ " already exists in ownership table"
-
--- | Removes an existing owner from the ownership table        
-saRemoveOwner :: Identifier -> ScopeAnalyzer ()
-saRemoveOwner n = gets ownershipTable >>= \ost ->
-    do n' <- saLookup n
-       case lookup n' ost of
-          Nothing -> throwError $ "Removal of unknown reference owner: " ++ n
-          Just xs -> case length xs of
-                        0 -> modify $ \s -> s { ownershipTable = filter (\(x, _) -> n' /= x) (ownershipTable s) }
-                        _ -> throwError $ show n ++ " cannot be deallocated as references to it still exists"                                              
-          
--- | Inserts ownership over m for n
--- EXPAND SO OWNERSHIP TABLE IS PER SCOPE BASIS  
-saInsertOwnership :: Identifier -> Identifier -> ScopeAnalyzer ()
-saInsertOwnership n m = gets ownershipTable >>= \ost ->
-    do n' <- saLookup n
-       m' <- saLookup m
-       case lookup n' ost of
-           Nothing -> throwError $ "Error: " ++ show n ++ " cannot be referenced"
-           Just xs -> modify $ \s -> s { ownershipTable = (n', m':xs) : filter (\(x, _) -> n' /= x) (ownershipTable s) }    
-
--- | Removes ownership over m from n
--- TODO: EXPAND SO OWNERSHIP TABLE IS PER SCOPE BASIS
-saRemoveOwnership :: Identifier -> Identifier -> ScopeAnalyzer ()
-saRemoveOwnership n m = gets ownershipTable >>= \ost ->
-    do n' <- saLookup n
-       m' <- saLookup m
-       case lookup n' ost of
-           Nothing -> throwError $ "Error: Unknown reference owner: " ++ show n
-           Just xs -> do when (m' `notElem` xs) (throwError $ "Error: " ++ show m ++ " is not a reference of " ++ show n)
-                         modify $ \s -> s { ownershipTable = (n', filter (/= m') xs) : filter (\(x, _) -> n' /= x) (ownershipTable s) }    
-                                                
+        Just i -> return i                                      
 
 -- | Scope Analyses Expressions
 saExpression :: Expression -> ScopeAnalyzer SExpression
@@ -208,14 +159,12 @@ saStatement s =
             <*> saArgs args
 
         (ObjectConstruction tp (n, e)) ->
-            do n' <- saLookup n
-               e' <- mapM saExpression e
-               saInsertOwner n'
-               return $ ObjectConstruction tp (n', e')
+            ObjectConstruction
+            <$> pure tp
+            <*> maybeArrayCell n e
         
         (ObjectDestruction tp (n, e)) ->
-            saRemoveOwner n
-            >> ObjectDestruction
+            ObjectDestruction
             <$> pure tp
             <*> maybeArrayCell n e
 

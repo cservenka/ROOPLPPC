@@ -21,18 +21,17 @@ type Size = Integer
 type Address = Integer
 type Offset = Integer
 
-data MEState =
-    MEState {
-        addressTable :: [(Label, Address)],
-        sizeTable :: [(TypeName, Size)],
-        offsetTable :: [(TypeName, [(MethodName, Offset)])],
-        programSize :: Size,
-        freeListsSize :: Size,
-        stackOffset :: Offset,
-        initialMemoryBlockSize :: Size,
-        referenceCounterIndex :: Offset,
-        arrayElementOffset :: Offset
-    } deriving (Show, Eq)
+data MEState = MEState {
+    addressTable :: [(Label, Address)],
+    sizeTable :: [(TypeName, Size)],
+    offsetTable :: [(TypeName, [(MethodName, Offset)])],
+    programSize :: Size,
+    freeListsSize :: Size,
+    stackOffset :: Offset,
+    initialMemoryBlockSize :: Size,
+    referenceCounterIndex :: Offset,
+    arrayElementOffset :: Offset
+} deriving (Show, Eq)
 
 newtype MacroExpander a = MacroExpander { runME :: ReaderT MEState (Except String) a }
     deriving (Functor, Applicative, Monad, MonadReader MEState, MonadError String)
@@ -47,19 +46,17 @@ getOffsetTable s = map (second (map toOffset)) indexedVT
 
 -- | Initializes the macro state containing the address, size, offset tables and the program size
 initialState :: MProgram -> SAState -> MEState
-initialState (GProg p) s =
-    MEState {
-        addressTable = mapMaybe toPair $ zip [0..] p,
-        sizeTable = (classSize . caState) s,
-        offsetTable = getOffsetTable s,
-        programSize = genericLength p,
-        freeListsSize = 10,
-        stackOffset = 16384,
-        initialMemoryBlockSize = 1024,
-        referenceCounterIndex = 1,
-        arrayElementOffset = 2
-        }
-
+initialState (GProg p) s = MEState {
+    addressTable = mapMaybe toPair $ zip [0..] p,
+    sizeTable = (classSize . caState) s,
+    offsetTable = getOffsetTable s,
+    programSize = genericLength p,
+    freeListsSize = 10,
+    stackOffset = 16384,
+    initialMemoryBlockSize = 1024,
+    referenceCounterIndex = 1,
+    arrayElementOffset = 2
+}
     where toPair (a, (Just l, _)) = Just (l, a)
           toPair _ = Nothing
 

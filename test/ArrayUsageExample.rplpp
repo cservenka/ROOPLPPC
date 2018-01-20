@@ -36,7 +36,7 @@ class Program
         new Foo[length] fooList
         new Bar[length] barList
         new int[length] intList
-        new int[0] singleton
+        new int[1] singleton
 
         // Array destroying
         delete int[0] singleton

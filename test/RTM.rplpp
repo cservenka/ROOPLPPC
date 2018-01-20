@@ -1,10 +1,9 @@
 class Cell
+    Cell self
     Cell right
-    cell left
+    Cell left
     int data
-    int index
-    cell self
-
+    
     method getLeft(Cell cell)
         right <=> cell
 
@@ -14,16 +13,8 @@ class Cell
     method getSelf(Cell cell)
         self <=> cell
 
-    method lookup(int pos, int symbol)
-        if pos = index then
-            symbol <=> data
-        else
-            if pos < index then
-                call left::lookup(pos, symbol)
-            else
-                call right::lookup(pos, symbol)
-            fi pos < index
-        fi pos = index
+    method getSymbol(int symbol)
+        symbol <=> data
 
 class RTM
     Cell tapeHead
@@ -32,65 +23,229 @@ class RTM
     int[] s1
     int[] s2
     int SLASH
+    int LEFT
+    int RIGHT
+    int BLANK
+    int state
+    int Qs
+    int Qf
+    int symbol
+    int PC_MAX
+    int pc
 
+    method initLiterals()
+        // Initialize string literals
+        SLASH += 9999
+        LEFT  += 9998
+        RIGHT += 9997
+        BLANK += 9996
 
-    method main()
-        new int[30] q1
-        new int[30] q2
-        new int[30] s1
-        new int[30] s2
+        // Set max program counter
+        PC_MAX += 7
 
+    method initRules()
+        // Initialize transition rule arrays
+        new int[8] q1
+        new int[8] q2
+        new int[8] s1
+        new int[8] s2
 
-    method simulate(Cell tapeHead, int pos, int state, int[] q1, int[] s1, int[] s2, int[] q2, int pc) 
+        // Define transition rules for binary number incrementation
+        q1[0] += 1
+        s1[0] += BLANK
+        s2[0] += BLANK
+        q2[0] += 2
+
+        q1[1] += 2
+        s1[1] += SLASH
+        s2[1] += RIGHT
+        q2[1] += 3
+
+        q1[2] += 3
+        s1[2] += 0
+        s2[2] += 1
+        q2[2] += 4
+
+        q1[3] += 3
+        s1[3] += 1
+        s2[3] += 0
+        q2[3] += 2
+
+        q1[4] += 3
+        s1[4] += BLANK
+        s2[4] += BLANK
+        q2[4] += 4
+
+        q1[5] += 4
+        s1[5] += SLASH
+        s2[5] += LEFT
+        q2[5] += 5
+
+        q1[6] += 5
+        s1[6] += 0
+        s2[6] += 0
+        q2[6] += 4
+
+        q1[7] += 5
+        s1[7] += BLANK
+        s2[7] += BLANK
+        q2[7] += 6
+
+    method initTape()
+        local Cell cell0 = nil
+        local Cell cell1 = nil
+        local Cell cell2 = nil
+        local Cell cell3 = nil
+        local Cell cell4 = nil
+
+        // Init cells
+        new Cell cell0
+        new Cell cell1
+        new Cell cell2
+        new Cell cell3
+        new Cell cell4
+
+        // Write 1 1 0 1 on tape
+        symbol += BLANK
+        uncall cell0::getSymbol(symbol)
+        symbol += 1
+        uncall cell1::getSymbol(symbol)
+        symbol += 1
+        uncall cell2::getSymbol(symbol)
+        symbol += 1
+        uncall cell4::getSymbol(symbol)
+
+        // Set tape head
+        tapeHead <=> cell0
+
+        // Set self pointers
+        copy Cell tapeHead cell0
+        uncall tapeHead::getSelf(cell0)
+        copy Cell cell1 cell0
+        uncall cell1::getSelf(cell0)
+        copy Cell cell2 cell0
+        uncall cell2::getSelf(cell0)
+        copy Cell cell3 cell0
+        uncall cell3::getSelf(cell0)
+        copy Cell cell4 cell0
+        uncall cell4::getSelf(cell0)
+
+        // Link cell 3 and 4
+        copy Cell cell3 cell0
+        uncall cell4::getLeft(cell0)
+        uncall cell3::getRight(cell4)
+
+        // Link cell 2 and 3
+        copy Cell cell2 cell0
+        uncall cell3::getLeft(cell0)
+        uncall cell2::getRight(cell3)
+
+        // Link cell1 and cell 2
+        copy Cell cell1 cell0
+        uncall cell2::getLeft(cell0)
+        uncall cell1::getRight(cell2)
+
+        // Link tapeHead and cell 1
+        copy Cell tapeHead cell0
+        uncall cell1::getLeft(cell0)
+        uncall tapeHead::getRight(cell1)
+
+        delocal Cell cell4 = nil
+        delocal Cell cell3 = nil
+        delocal Cell cell2 = nil
+        delocal Cell cell1 = nil
+        delocal Cell cell0 = nil
+
+    method init()
+        // Prepare for simulation
+        call initLiterals()
+        call initRules()
+        call initTape()
+
+        // Init pc, start and finishing state
+        state += 1
+        Qs += 1
+        Qf += 6
+
+        // Start simulation
+        call simulate()
+
+    method simulate() 
         from state = Qs do
-            pc += 1                                 // Increment pc local int symbol = 0
-            call tapeHead::lookup(pos, symbol)      //Fetch current symbol 
-            call inst(state, symbol, q1, s1, s2, q2, pc, tapeHead)
-            uncall tapeHead::lookup(pos, symbol)    //Zero-clear symbol delocal symbol = 0
+            call tapeHead::getSymbol(symbol)      // Fetch current symbol 
+            call inst()
+            uncall tapeHead::getSymbol(symbol)    // Zero-clear symbol
+            pc += 1                               // Increment pc
 
-            if pc = PC_MAX then                     // Reset pc 
+            if pc = PC_MAX then                   // Reset pc 
                 pc ^= PC_MAX
             else skip
-            fi pc = 0 
+            fi pc = 0
         loop skip
         until state = Qf
  
-    method inst(int state, int symbol, int[] q1, int[] s1, int[] s2, int[] q2, int pc, Cell tapeHead)
-        if state = q1[pc] && symbol = s1[pc] then   // Symbol rule:
+    method inst()
+        if state = q1[pc] & symbol = s1[pc] then   // Symbol rule:
             state += q2[pc]-q1[pc]                  // set state to q2[pc]
             symbol += s2[pc]-s1[pc]                 // set symbol to s2[pc]
-        fi state = q2[pc] && symbol = s2[pc] 
-        if state = q1[pc] && s1[pc] = SLASH then    // Move rule:
-            state += q2[pc]-q1[pc]                  // set state to q2[pc] 
+        else skip
+        fi state = q2[pc] & symbol = s2[pc] 
+        if state = q1[pc] & s1[pc] = SLASH then    // Move rule:
+            state += q2[pc]-q1[pc]                 // set state to q2[pc] 
             if s2[pc] = RIGHT then  
-                call moveRight(tapeHead)            // Move tape head right 
+                call moveRight()    // Move tape head right
+            else skip 
             fi s2[pc] = RIGHT   
             if s2[pc] = LEFT then   
-                uncall moveRight(tapeHead)          // Move tape head left
+                uncall moveRight()  // Move tape head left
+            else skip
             fi s2[pc] = LEFT
-        fi state = q2[pc] && s1[pc] = SLASH
+        else skip
+        fi state = q2[pc] & s1[pc] = SLASH
 
-        
-    method moveRight(Cell tapeHead)
+    method moveRight()
         local Cell right = nil
-        call tapeHead::getRight(right)
-
-        local Cell oldTapeHead = nil
-        call right::getLeft(oldTapeHead)    // Retrieve copy to current head
-        uncopy Cell oldTapeHead tapeHead    // uncompute reference to current head
-        uncall right::getLeft(oldTapeHead)  // store copy to current head
-        delocal Cell oldTapehead = nil
-        tapeHead <=> right                  // Set right as new tape head
-
-        new Cell right                      // Init new right cell 
         local Cell tmp = nil
-        copy Cell tapeHead tmp              // Copy current tape head
-        uncall right::getLeft(tmp)          // Store left reference in new cell
-        copy Cell right tmp                 // Copy reference to new right cell
-        uncall right::getSelf(tmp)          // Store 'self' in new cell
-        delocal Cell tmp = nil
-        uncall tapeHead::getRight(right)    // Store right as new right cell of head
+        uncall tapeHead::getSymbol(symbol)   // Put symbol back in current cell
+        call tapeHead::getRight(right)       // Get right neighbour
 
+        if right = nil & symbol = BLANK then
+            symbol ^= BLANK                  // Zero clear symbol
+            new Cell right                   // Init new neighbour
+            copy Cell right tmp              // Copy reference to self
+            uncall right::getSelf(tmp)       // Store self reference
+            uncall right::getLeft(tapeHead)  // Set tape head as left of new cell
+            right <=> tapeHead 
+        else          
+            call right::getLeft(tmp)         // Get copy of tape head reference
+            uncopy Cell tmp tapeHead         // Clear reference to tape head
+
+            if tapeHead = nil & symbol = BLANK then
+                call tmp::getSelf(tapeHead)  // rev: set self pointer
+                uncopy Cell tmp tapeHead     // rev: new self pointer
+                delete Cell tmp              // rev: new left neighbour
+                symbol ^= BLANK
+            else skip                        // In reverse:
+            fi tmp = nil                     // Allocate new left if current is nil
+            
+            uncall right::getLeft(tmp)       // Put tape head reference back
+            tapeHead <=> right
+            call tapeHead::getRight(right)   // Get right of new tape head
+            call tapeHead::getSymbol(symbol) // Get symbol of new tape head
+        fi right = nil
+
+        uncall tapeHead::getRight(right)    // Set right neighbour
         delocal Cell right = nil
+        delocal Cell tmp = nil
 
+// This program contains a RTM implementing 
+// incrementation of a non-negative n-bit binary number by 1 (modulo 2n). 
 
+// The tape is initialized with | b | 1 | 1 | 0 | 0 | and after execution,
+// the tape is left with | b | 0 | 0 | 1 | 1 |
+class Program
+    RTM bni 
+
+    method main()
+        new RTM bni
+        call bni::init()

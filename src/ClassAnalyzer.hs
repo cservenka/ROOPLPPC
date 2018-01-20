@@ -22,15 +22,14 @@ type Size = Integer
 
 -- | The Class Analyzer State consists of a list of classes, sizes, methods
 -- | and a main class
-data CAState =
-  CAState {
-      classes :: [(TypeName, ClassDeclaration)],
-      subClasses :: [(TypeName, [TypeName])],
-      superClasses :: [(TypeName, [TypeName])],
-      classSize :: [(TypeName, Size)],
-      classMethods :: [(TypeName, [MethodDeclaration])],
-      mainClass :: Maybe TypeName
-  } deriving (Show, Eq)
+data CAState = CAState {
+    classes :: [(TypeName, ClassDeclaration)],
+    subClasses :: [(TypeName, [TypeName])],
+    superClasses :: [(TypeName, [TypeName])],
+    classSize :: [(TypeName, Size)],
+    classMethods :: [(TypeName, [MethodDeclaration])],
+    mainClass :: Maybe TypeName
+} deriving (Show, Eq)
 
 -- | The Class Analyzer monad
 newtype ClassAnalyzer a = ClassAnalyzer { runCA :: StateT CAState (Except String) a }
@@ -38,23 +37,21 @@ newtype ClassAnalyzer a = ClassAnalyzer { runCA :: StateT CAState (Except String
 
 -- | Initializes the Class Analyzer State with empty lists and Nothing for the mainClass
 initialState :: CAState
-initialState =
-  CAState {
-      classes = [],
-      subClasses = [],
-      superClasses = [],
-      classSize = [],
-      classMethods = [],
-      mainClass = Nothing 
-  }             
+initialState = CAState {
+    classes = [],
+    subClasses = [],
+    superClasses = [],
+    classSize = [],
+    classMethods = [],
+    mainClass = Nothing 
+}             
 
 -- | Returns a class from the Class Analyzer State if passed typename matches
 getClass :: TypeName -> ClassAnalyzer ClassDeclaration
-getClass n =
-  gets classes >>= \cs ->
+getClass n = gets classes >>= \cs ->
     case lookup n cs of
-      (Just c) -> return c
-      Nothing -> throwError $ "ICE: Unknown class " ++ n
+        (Just c) -> return c
+        Nothing -> throwError $ "ICE: Unknown class " ++ n
 
 -- | Returns the base class inherited from
 getBaseClass :: TypeName -> ClassAnalyzer (Maybe TypeName)
@@ -101,13 +98,10 @@ checkCyclicInheritance (GCDecl n b _ _) = checkInheritance b [n]
 -- | Sets the main class in the Class Analyzer State
 setMainClass :: ClassDeclaration -> ClassAnalyzer ()
 setMainClass (GCDecl n _ _ ms) = when ("main" `elem` ms') (gets mainClass >>= set)
-  where
-    ms' = map (\(GMDecl n' _ _) -> n') ms
-    set (Just m) =
-      throwError $
-      "Method main already defined in class " ++
-      m ++ " but redefined in class " ++ n
-    set Nothing = modify $ \s -> s {mainClass = Just n}
+    where
+        ms' = map (\(GMDecl n' _ _) -> n') ms
+        set (Just m) = throwError $ "Method main already defined in class " ++ m ++ " but redefined in class " ++ n
+        set Nothing = modify $ \s -> s {mainClass = Just n}
 
 -- | Adds classes to the state
 setClasses :: ClassDeclaration -> ClassAnalyzer ()
@@ -159,24 +153,24 @@ setClassMethods c@(GCDecl n _ _ _) = resolveClassMethods c >>= \cm ->
 -- | Class Analyzes a program
 caProgram :: Program -> ClassAnalyzer Program
 caProgram (GProg p) = do
-  mapM_ setClasses p
-  mapM_ setSubClasses p
-  mapM_ setSuperClasses p
-  mapM_ setClassSize p
-  mapM_ setClassMethods p
-  mapM_ checkDuplicateClasses p
-  mapM_ checkDuplicateFields p
-  mapM_ checkDuplicateMethods p
-  mapM_ checkBaseClass p
-  mapM_ checkCyclicInheritance p
-  mapM_ setMainClass p
-  mc <- gets mainClass
-  when (isNothing mc) (throwError "No main method defined")
-  return $ GProg rootClasses
-  where
-    rootClasses = filter noBase p
-    noBase (GCDecl _ Nothing _ _) = True
-    noBase _ = False
+    mapM_ setClasses p
+    mapM_ setSubClasses p
+    mapM_ setSuperClasses p
+    mapM_ setClassSize p
+    mapM_ setClassMethods p
+    mapM_ checkDuplicateClasses p
+    mapM_ checkDuplicateFields p
+    mapM_ checkDuplicateMethods p
+    mapM_ checkBaseClass p
+    mapM_ checkCyclicInheritance p
+    mapM_ setMainClass p
+    mc <- gets mainClass
+    when (isNothing mc) (throwError "No main method defined")
+    return $ GProg rootClasses
+    where
+        rootClasses = filter noBase p
+        noBase (GCDecl _ Nothing _ _) = True
+        noBase _ = False
  
 -- | Performs Class Analysis on the program
 classAnalysis :: Program -> Except String (Program, CAState)
