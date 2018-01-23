@@ -101,3 +101,6 @@ crashlytics-build.properties
 fabric.properties
 .vscode/tasks.json
 .vscode/spellright.dict
+
+# vscode
+.vscode/*
