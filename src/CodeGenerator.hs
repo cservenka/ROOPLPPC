@@ -405,10 +405,10 @@ cgCall args jump this =
            store = concatMap push $ rr ++ ra ++ [this]
        return $ concat la ++ store ++ jump ++ invertInstructions store ++ invertInstructions (concat la)
     where push r = [(Nothing, EXCH r registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
-          loadAddr (n, e) = 
+          loadAddr (n, e) =
             case e of
                 Nothing -> loadVariableAddress n
-                Just e' -> loadArrayElementVariableAddress n e'
+                Just e' -> loadArrayElementVariableAddress n e'       
                      
 -- | Code generation for local calling    
 cgLocalCall :: SIdentifier -> [(SIdentifier, Maybe SExpression)]-> CodeGenerator [(Maybe Label, MInstruction)]
@@ -462,7 +462,7 @@ loadForCall (n, e) = gets (symbolTable . saState) >>= \st ->
             case e of 
                 Just x' -> loadArrayElementVariableValue n x'
                 _ -> throwError $ "ICE: Invalid variable index " ++ show n
-        (Just _) -> loadVariableAddress n
+        (Just _) -> loadVariableValue n
         _ -> throwError $ "ICE: Invalid variable index " ++ show n
 
 -- | Code generation for object calls
