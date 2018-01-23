@@ -52,7 +52,6 @@ class Node
         if right = nil then skip
         else call right::mirror()       // Recursively swap children if right != nil
         fi right = nil                 
-
     
 class Tree
     Node root

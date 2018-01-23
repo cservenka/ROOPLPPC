@@ -238,7 +238,6 @@ class RTM
         delocal Cell right = nil
         delocal Cell tmp = nil
 
-
 class Program
     RTM bni 
 

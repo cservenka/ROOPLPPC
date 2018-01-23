@@ -142,5 +142,5 @@ showProgram (GProg p) = ";; pendulum pal file\n" ++ intercalate "\n" (map showLi
           spaces :: (Int -> String)
           spaces n = [1..n] >> " "
 
-writeProgram :: Program -> IO ()
-writeProgram p = writeFile "../test/Example.pal" $ showProgram p
+writeProgram :: String -> Program -> IO ()
+writeProgram output p = writeFile output $ showProgram p

@@ -1,0 +1,1280 @@
+;; pendulum pal file
+top:                     BRA    start
+l_r_linkedList:          DATA   0
+l_r_sumResult:           DATA   0
+l_r_listLength:          DATA   0
+l_Program_vt:            DATA   972
+l_LinkedList_vt:         DATA   459
+                         DATA   562
+                         DATA   704
+                         DATA   945
+l_Cell_vt:               DATA   223
+                         DATA   252
+l_malloc_top:            BRA    l_malloc_bot
+l_malloc:                SWAPBR $2
+                         NEG    $2
+                         ADDI   $9 2
+                         XOR    $8 $0
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $7 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         BRA    l_malloc1
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $7 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         XOR    $8 $0
+                         ADDI   $9 -2
+l_malloc_bot:            BRA    l_malloc_top
+l_malloc1_top:           BRA    l_malloc1_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         SUB    $17 $8
+                         XOR    $17 $4
+l_malloc1:               SWAPBR $2
+                         NEG    $2
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         XOR    $17 $4
+                         ADD    $17 $8
+                         EXCH   $19 $17
+                         XOR    $18 $19
+                         EXCH   $19 $17
+                         XOR    $13 $9
+                         SUB    $13 $7
+cmp_top_7:               BGEZ   $13 cmp_bot_8
+                         XORI   $14 1
+cmp_bot_8:               BGEZ   $13 cmp_top_7
+                         XOR    $10 $14
+cmp_bot_8_i:             BGEZ   $13 cmp_top_7_i
+                         XORI   $14 1
+cmp_top_7_i:             BGEZ   $13 cmp_bot_8_i
+                         ADD    $13 $7
+                         XOR    $13 $9
+l_o_test:                BEQ    $10 $0 l_o_test_false
+                         XORI   $10 1
+                         ADDI   $8 1
+                         EXCH   $19 $17
+                         XOR    $18 $19
+                         EXCH   $19 $17
+                         RL     $9 1
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         EXCH   $11 $1
+                         ADDI   $1 -1
+                         EXCH   $12 $1
+                         ADDI   $1 -1
+                         EXCH   $14 $1
+                         ADDI   $1 -1
+                         EXCH   $16 $1
+                         ADDI   $1 -1
+                         EXCH   $17 $1
+                         ADDI   $1 -1
+                         EXCH   $18 $1
+                         ADDI   $1 -1
+                         EXCH   $20 $1
+                         ADDI   $1 -1
+                         EXCH   $21 $1
+                         ADDI   $1 -1
+                         EXCH   $22 $1
+                         ADDI   $1 -1
+                         EXCH   $23 $1
+                         ADDI   $1 -1
+                         BRA    l_malloc1
+                         ADDI   $1 1
+                         EXCH   $23 $1
+                         ADDI   $1 1
+                         EXCH   $22 $1
+                         ADDI   $1 1
+                         EXCH   $21 $1
+                         ADDI   $1 1
+                         EXCH   $20 $1
+                         ADDI   $1 1
+                         EXCH   $18 $1
+                         ADDI   $1 1
+                         EXCH   $17 $1
+                         ADDI   $1 1
+                         EXCH   $16 $1
+                         ADDI   $1 1
+                         EXCH   $14 $1
+                         ADDI   $1 1
+                         EXCH   $12 $1
+                         ADDI   $1 1
+                         EXCH   $11 $1
+                         ADDI   $1 1
+                         EXCH   $10 $1
+                         RR     $9 1
+                         ADDI   $8 -1
+                         XORI   $10 1
+l_o_assert_true:         BRA    l_o_assert
+l_o_test_false:          BRA    l_o_test
+cmp_top_11:              BEQ    $18 $0 cmp_bot_12
+                         XORI   $20 1
+cmp_bot_12:              BEQ    $18 $0 cmp_top_11
+                         XOR    $11 $20
+cmp_bot_12_i:            BEQ    $18 $0 cmp_top_11_i
+                         XORI   $20 1
+cmp_top_11_i:            BEQ    $18 $0 cmp_bot_12_i
+l_i_test:                BEQ    $11 $0 l_i_test_false
+                         XORI   $11 1
+                         ADD    $6 $18
+                         SUB    $18 $6
+                         EXCH   $12 $6
+                         EXCH   $12 $17
+                         XOR    $12 $6
+                         XORI   $11 1
+l_i_assert_true:         BRA    l_i_assert
+l_i_test_false:          BRA    l_i_test
+                         ADDI   $8 1
+                         RL     $9 1
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         EXCH   $11 $1
+                         ADDI   $1 -1
+                         EXCH   $12 $1
+                         ADDI   $1 -1
+                         EXCH   $14 $1
+                         ADDI   $1 -1
+                         EXCH   $16 $1
+                         ADDI   $1 -1
+                         EXCH   $17 $1
+                         ADDI   $1 -1
+                         EXCH   $18 $1
+                         ADDI   $1 -1
+                         EXCH   $20 $1
+                         ADDI   $1 -1
+                         EXCH   $21 $1
+                         ADDI   $1 -1
+                         EXCH   $22 $1
+                         ADDI   $1 -1
+                         EXCH   $23 $1
+                         ADDI   $1 -1
+                         BRA    l_malloc1
+                         ADDI   $1 1
+                         EXCH   $23 $1
+                         ADDI   $1 1
+                         EXCH   $22 $1
+                         ADDI   $1 1
+                         EXCH   $21 $1
+                         ADDI   $1 1
+                         EXCH   $20 $1
+                         ADDI   $1 1
+                         EXCH   $18 $1
+                         ADDI   $1 1
+                         EXCH   $17 $1
+                         ADDI   $1 1
+                         EXCH   $16 $1
+                         ADDI   $1 1
+                         EXCH   $14 $1
+                         ADDI   $1 1
+                         EXCH   $12 $1
+                         ADDI   $1 1
+                         EXCH   $11 $1
+                         ADDI   $1 1
+                         EXCH   $10 $1
+                         RR     $9 1
+                         ADDI   $8 -1
+                         XOR    $12 $6
+                         EXCH   $12 $17
+                         ADD    $6 $9
+l_i_assert:              BNE    $11 $0 l_i_assert_true
+                         EXCH   $12 $17
+                         SUB    $6 $9
+cmp_top_13:              BEQ    $6 $12 cmp_bot_14
+                         XORI   $21 1
+cmp_bot_14:              BEQ    $6 $12 cmp_top_13
+cmp_top_15:              BNE    $12 $0 cmp_bot_16
+                         XORI   $22 1
+cmp_bot_16:              BNE    $12 $0 cmp_top_15
+                         ORX    $23 $21 $22
+                         XOR    $11 $23
+                         ORX    $23 $21 $22
+cmp_bot_16_i:            BNE    $12 $0 cmp_top_15_i
+                         XORI   $22 1
+cmp_top_15_i:            BNE    $12 $0 cmp_bot_16_i
+cmp_bot_14_i:            BEQ    $6 $12 cmp_top_13_i
+                         XORI   $21 1
+cmp_top_13_i:            BEQ    $6 $12 cmp_bot_14_i
+                         ADD    $6 $9
+                         EXCH   $12 $17
+l_o_assert:              BNE    $10 $0 l_o_assert_true
+                         XOR    $15 $9
+                         SUB    $15 $7
+cmp_top_9:               BGEZ   $15 cmp_bot_10
+                         XORI   $16 1
+cmp_bot_10:              BGEZ   $15 cmp_top_9
+                         XOR    $10 $16
+cmp_bot_10_i:            BGEZ   $15 cmp_top_9_i
+                         XORI   $16 1
+cmp_top_9_i:             BGEZ   $15 cmp_bot_10_i
+                         ADD    $15 $7
+                         XOR    $15 $9
+l_malloc1_bot:           BRA    l_malloc1_top
+l_constructor_5_top:     BRA    l_constructor_5_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_constructor_5:         SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+                         EXCH   $9 $6
+                         XOR    $8 $9
+                         EXCH   $9 $6
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+l_constructor_5_bot:     BRA    l_constructor_5_top
+l_append_6_top:          BRA    l_append_6_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_append_6:              SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_21:              BNE    $9 $0 cmp_bot_22
+                         XORI   $10 1
+cmp_bot_22:              BNE    $9 $0 cmp_top_21
+                         EXCH   $11 $6
+cmp_top_23:              BEQ    $11 $0 cmp_bot_24
+                         XORI   $12 1
+cmp_bot_24:              BEQ    $11 $0 cmp_top_23
+                         ANDX   $13 $10 $12
+f_top_25:                BEQ    $13 $0 f_bot_26
+                         XORI   $14 1
+f_bot_26:                BEQ    $13 $0 f_top_25
+                         XOR    $7 $14
+f_bot_26_i:              BEQ    $13 $0 f_top_25_i
+                         XORI   $14 1
+f_top_25_i:              BEQ    $13 $0 f_bot_26_i
+                         ANDX   $13 $10 $12
+cmp_bot_24_i:            BEQ    $11 $0 cmp_top_23_i
+                         XORI   $12 1
+cmp_top_23_i:            BEQ    $11 $0 cmp_bot_24_i
+                         EXCH   $11 $6
+cmp_bot_22_i:            BNE    $9 $0 cmp_top_21_i
+                         XORI   $10 1
+cmp_top_21_i:            BNE    $9 $0 cmp_bot_22_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+test_17:                 BEQ    $7 $0 test_false_19
+                         XORI   $7 1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $10 $6
+swap_27:                 XOR    $9 $10
+                         XOR    $10 $9
+                         XOR    $9 $10
+                         EXCH   $10 $6
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XORI   $7 1
+assert_true_18:          BRA    assert_20
+test_false_19:           BRA    test_17
+assert_20:               BNE    $7 $0 assert_true_18
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_28:              BEQ    $9 $0 cmp_bot_29
+                         XORI   $10 1
+cmp_bot_29:              BEQ    $9 $0 cmp_top_28
+                         EXCH   $11 $6
+cmp_top_30:              BNE    $11 $0 cmp_bot_31
+                         XORI   $12 1
+cmp_bot_31:              BNE    $11 $0 cmp_top_30
+                         ANDX   $13 $10 $12
+f_top_32:                BEQ    $13 $0 f_bot_33
+                         XORI   $14 1
+f_bot_33:                BEQ    $13 $0 f_top_32
+                         XOR    $7 $14
+f_bot_33_i:              BEQ    $13 $0 f_top_32_i
+                         XORI   $14 1
+f_top_32_i:              BEQ    $13 $0 f_bot_33_i
+                         ANDX   $13 $10 $12
+cmp_bot_31_i:            BNE    $11 $0 cmp_top_30_i
+                         XORI   $12 1
+cmp_top_30_i:            BNE    $11 $0 cmp_bot_31_i
+                         EXCH   $11 $6
+cmp_bot_29_i:            BEQ    $9 $0 cmp_top_28_i
+                         XORI   $10 1
+cmp_top_28_i:            BEQ    $9 $0 cmp_bot_29_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_38:              BEQ    $9 $0 cmp_bot_39
+                         XORI   $10 1
+cmp_bot_39:              BEQ    $9 $0 cmp_top_38
+f_top_40:                BEQ    $10 $0 f_bot_41
+                         XORI   $11 1
+f_bot_41:                BEQ    $10 $0 f_top_40
+                         XOR    $7 $11
+f_bot_41_i:              BEQ    $10 $0 f_top_40_i
+                         XORI   $11 1
+f_top_40_i:              BEQ    $10 $0 f_bot_41_i
+cmp_bot_39_i:            BEQ    $9 $0 cmp_top_38_i
+                         XORI   $10 1
+cmp_top_38_i:            BEQ    $9 $0 cmp_bot_39_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+test_34:                 BEQ    $7 $0 test_false_36
+                         XORI   $7 1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XOR    $10 $9
+loadMetAdd_42:           EXCH   $11 $10
+                         ADDI   $11 1
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 -1
+                         EXCH   $11 $10
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         ADDI   $13 -397
+l_jmp_43:                SWAPBR $13
+                         NEG    $13
+                         ADDI   $13 397
+                         ADDI   $1 1
+                         EXCH   $10 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $11 $10
+                         ADDI   $11 1
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 -1
+loadMetAdd_42_i:         EXCH   $11 $10
+                         XOR    $10 $9
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XORI   $7 1
+assert_true_35:          BRA    assert_37
+test_false_36:           BRA    test_34
+assert_37:               BNE    $7 $0 assert_true_35
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_44:              BEQ    $9 $0 cmp_bot_45
+                         XORI   $10 1
+cmp_bot_45:              BEQ    $9 $0 cmp_top_44
+f_top_46:                BEQ    $10 $0 f_bot_47
+                         XORI   $11 1
+f_bot_47:                BEQ    $10 $0 f_top_46
+                         XOR    $7 $11
+f_bot_47_i:              BEQ    $10 $0 f_top_46_i
+                         XORI   $11 1
+f_top_46_i:              BEQ    $10 $0 f_bot_47_i
+cmp_bot_45_i:            BEQ    $9 $0 cmp_top_44_i
+                         XORI   $10 1
+cmp_top_44_i:            BEQ    $9 $0 cmp_bot_45_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+l_append_6_bot:          BRA    l_append_6_top
+l_insertHead_1_top:      BRA    l_insertHead_1_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_insertHead_1:          SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_52:              BNE    $9 $0 cmp_bot_53
+                         XORI   $10 1
+cmp_bot_53:              BNE    $9 $0 cmp_top_52
+                         EXCH   $11 $6
+cmp_top_54:              BEQ    $11 $0 cmp_bot_55
+                         XORI   $12 1
+cmp_bot_55:              BEQ    $11 $0 cmp_top_54
+                         ANDX   $13 $10 $12
+f_top_56:                BEQ    $13 $0 f_bot_57
+                         XORI   $14 1
+f_bot_57:                BEQ    $13 $0 f_top_56
+                         XOR    $7 $14
+f_bot_57_i:              BEQ    $13 $0 f_top_56_i
+                         XORI   $14 1
+f_top_56_i:              BEQ    $13 $0 f_bot_57_i
+                         ANDX   $13 $10 $12
+cmp_bot_55_i:            BEQ    $11 $0 cmp_top_54_i
+                         XORI   $12 1
+cmp_top_54_i:            BEQ    $11 $0 cmp_bot_55_i
+                         EXCH   $11 $6
+cmp_bot_53_i:            BNE    $9 $0 cmp_top_52_i
+                         XORI   $10 1
+cmp_top_52_i:            BNE    $9 $0 cmp_bot_53_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+test_48:                 BEQ    $7 $0 test_false_50
+                         XORI   $7 1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $10 $6
+swap_58:                 XOR    $9 $10
+                         XOR    $10 $9
+                         XOR    $9 $10
+                         EXCH   $10 $6
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XORI   $7 1
+assert_true_49:          BRA    assert_51
+test_false_50:           BRA    test_48
+assert_51:               BNE    $7 $0 assert_true_49
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_59:              BEQ    $9 $0 cmp_bot_60
+                         XORI   $10 1
+cmp_bot_60:              BEQ    $9 $0 cmp_top_59
+                         EXCH   $11 $6
+cmp_top_61:              BNE    $11 $0 cmp_bot_62
+                         XORI   $12 1
+cmp_bot_62:              BNE    $11 $0 cmp_top_61
+                         ANDX   $13 $10 $12
+f_top_63:                BEQ    $13 $0 f_bot_64
+                         XORI   $14 1
+f_bot_64:                BEQ    $13 $0 f_top_63
+                         XOR    $7 $14
+f_bot_64_i:              BEQ    $13 $0 f_top_63_i
+                         XORI   $14 1
+f_top_63_i:              BEQ    $13 $0 f_bot_64_i
+                         ANDX   $13 $10 $12
+cmp_bot_62_i:            BNE    $11 $0 cmp_top_61_i
+                         XORI   $12 1
+cmp_top_61_i:            BNE    $11 $0 cmp_bot_62_i
+                         EXCH   $11 $6
+cmp_bot_60_i:            BEQ    $9 $0 cmp_top_59_i
+                         XORI   $10 1
+cmp_top_59_i:            BEQ    $9 $0 cmp_bot_60_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+l_insertHead_1_bot:      BRA    l_insertHead_1_top
+l_appendCell_2_top:      BRA    l_appendCell_2_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_appendCell_2:          SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         BRA    l_insertHead_1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_69:              BEQ    $9 $0 cmp_bot_70
+                         XORI   $10 1
+cmp_bot_70:              BEQ    $9 $0 cmp_top_69
+f_top_71:                BEQ    $10 $0 f_bot_72
+                         XORI   $11 1
+f_bot_72:                BEQ    $10 $0 f_top_71
+                         XOR    $7 $11
+f_bot_72_i:              BEQ    $10 $0 f_top_71_i
+                         XORI   $11 1
+f_top_71_i:              BEQ    $10 $0 f_bot_72_i
+cmp_bot_70_i:            BEQ    $9 $0 cmp_top_69_i
+                         XORI   $10 1
+cmp_top_69_i:            BEQ    $9 $0 cmp_bot_70_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+test_65:                 BEQ    $7 $0 test_false_67
+                         XORI   $7 1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XOR    $10 $9
+loadMetAdd_73:           EXCH   $11 $10
+                         ADDI   $11 1
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 -1
+                         EXCH   $11 $10
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         ADDI   $13 -629
+l_jmp_74:                SWAPBR $13
+                         NEG    $13
+                         ADDI   $13 629
+                         ADDI   $1 1
+                         EXCH   $10 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         EXCH   $11 $10
+                         ADDI   $11 1
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 -1
+loadMetAdd_73_i:         EXCH   $11 $10
+                         XOR    $10 $9
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         XORI   $7 1
+assert_true_66:          BRA    assert_68
+test_false_67:           BRA    test_65
+assert_68:               BNE    $7 $0 assert_true_66
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+cmp_top_75:              BEQ    $9 $0 cmp_bot_76
+                         XORI   $10 1
+cmp_bot_76:              BEQ    $9 $0 cmp_top_75
+f_top_77:                BEQ    $10 $0 f_bot_78
+                         XORI   $11 1
+f_bot_78:                BEQ    $10 $0 f_top_77
+                         XOR    $7 $11
+f_bot_78_i:              BEQ    $10 $0 f_top_77_i
+                         XORI   $11 1
+f_top_77_i:              BEQ    $10 $0 f_bot_78_i
+cmp_bot_76_i:            BEQ    $9 $0 cmp_top_75_i
+                         XORI   $10 1
+cmp_top_75_i:            BEQ    $9 $0 cmp_bot_76_i
+                         ADD    $8 $3
+                         ADDI   $8 2
+                         EXCH   $9 $8
+                         ADDI   $8 -2
+                         SUB    $8 $3
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+                         XORI   $9 1
+                         ADD    $8 $9
+                         XORI   $9 1
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+l_appendCell_2_bot:      BRA    l_appendCell_2_top
+l_prependCell_3_top:     BRA    l_prependCell_3_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_prependCell_3:         SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         BRA    l_insertHead_1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $8 $6
+cmp_top_83:              BEQ    $8 $0 cmp_bot_84
+                         XORI   $9 1
+cmp_bot_84:              BEQ    $8 $0 cmp_top_83
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_top_85:              BEQ    $11 $0 cmp_bot_86
+                         XORI   $12 1
+cmp_bot_86:              BEQ    $11 $0 cmp_top_85
+                         ANDX   $13 $9 $12
+f_top_87:                BEQ    $13 $0 f_bot_88
+                         XORI   $14 1
+f_bot_88:                BEQ    $13 $0 f_top_87
+                         XOR    $7 $14
+f_bot_88_i:              BEQ    $13 $0 f_top_87_i
+                         XORI   $14 1
+f_top_87_i:              BEQ    $13 $0 f_bot_88_i
+                         ANDX   $13 $9 $12
+cmp_bot_86_i:            BEQ    $11 $0 cmp_top_85_i
+                         XORI   $12 1
+cmp_top_85_i:            BEQ    $11 $0 cmp_bot_86_i
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_bot_84_i:            BEQ    $8 $0 cmp_top_83_i
+                         XORI   $9 1
+cmp_top_83_i:            BEQ    $8 $0 cmp_bot_84_i
+                         EXCH   $8 $6
+test_79:                 BEQ    $7 $0 test_false_81
+                         XORI   $7 1
+                         EXCH   $8 $6
+                         XOR    $9 $8
+loadMetAdd_89:           EXCH   $10 $9
+                         ADDI   $10 1
+                         EXCH   $11 $10
+                         XOR    $12 $11
+                         EXCH   $11 $10
+                         ADDI   $10 -1
+                         EXCH   $10 $9
+                         EXCH   $8 $6
+                         ADD    $13 $3
+                         ADDI   $13 2
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $13 $1
+                         ADDI   $1 -1
+                         EXCH   $9 $1
+                         ADDI   $1 -1
+                         ADDI   $12 -777
+l_jmp_90:                SWAPBR $12
+                         NEG    $12
+                         ADDI   $12 777
+                         ADDI   $1 1
+                         EXCH   $9 $1
+                         ADDI   $1 1
+                         EXCH   $13 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $13 -2
+                         SUB    $13 $3
+                         EXCH   $8 $6
+                         EXCH   $10 $9
+                         ADDI   $10 1
+                         EXCH   $11 $10
+                         XOR    $12 $11
+                         EXCH   $11 $10
+                         ADDI   $10 -1
+loadMetAdd_89_i:         EXCH   $10 $9
+                         XOR    $9 $8
+                         EXCH   $8 $6
+                         XORI   $7 1
+assert_true_80:          BRA    assert_82
+test_false_81:           BRA    test_79
+assert_82:               BNE    $7 $0 assert_true_80
+                         EXCH   $8 $6
+cmp_top_91:              BEQ    $8 $0 cmp_bot_92
+                         XORI   $9 1
+cmp_bot_92:              BEQ    $8 $0 cmp_top_91
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_top_93:              BNE    $11 $0 cmp_bot_94
+                         XORI   $12 1
+cmp_bot_94:              BNE    $11 $0 cmp_top_93
+                         ANDX   $13 $9 $12
+f_top_95:                BEQ    $13 $0 f_bot_96
+                         XORI   $14 1
+f_bot_96:                BEQ    $13 $0 f_top_95
+                         XOR    $7 $14
+f_bot_96_i:              BEQ    $13 $0 f_top_95_i
+                         XORI   $14 1
+f_top_95_i:              BEQ    $13 $0 f_bot_96_i
+                         ANDX   $13 $9 $12
+cmp_bot_94_i:            BNE    $11 $0 cmp_top_93_i
+                         XORI   $12 1
+cmp_top_93_i:            BNE    $11 $0 cmp_bot_94_i
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_bot_92_i:            BEQ    $8 $0 cmp_top_91_i
+                         XORI   $9 1
+cmp_top_91_i:            BEQ    $8 $0 cmp_bot_92_i
+                         EXCH   $8 $6
+                         EXCH   $8 $6
+cmp_top_101:             BEQ    $8 $0 cmp_bot_102
+                         XORI   $9 1
+cmp_bot_102:             BEQ    $8 $0 cmp_top_101
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_top_103:             BNE    $11 $0 cmp_bot_104
+                         XORI   $12 1
+cmp_bot_104:             BNE    $11 $0 cmp_top_103
+                         ANDX   $13 $9 $12
+f_top_105:               BEQ    $13 $0 f_bot_106
+                         XORI   $14 1
+f_bot_106:               BEQ    $13 $0 f_top_105
+                         XOR    $7 $14
+f_bot_106_i:             BEQ    $13 $0 f_top_105_i
+                         XORI   $14 1
+f_top_105_i:             BEQ    $13 $0 f_bot_106_i
+                         ANDX   $13 $9 $12
+cmp_bot_104_i:           BNE    $11 $0 cmp_top_103_i
+                         XORI   $12 1
+cmp_top_103_i:           BNE    $11 $0 cmp_bot_104_i
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_bot_102_i:           BEQ    $8 $0 cmp_top_101_i
+                         XORI   $9 1
+cmp_top_101_i:           BEQ    $8 $0 cmp_bot_102_i
+                         EXCH   $8 $6
+test_97:                 BEQ    $7 $0 test_false_99
+                         XORI   $7 1
+                         EXCH   $8 $6
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+swap_107:                XOR    $8 $10
+                         XOR    $10 $8
+                         XOR    $8 $10
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+                         EXCH   $8 $6
+                         XORI   $7 1
+assert_true_98:          BRA    assert_100
+test_false_99:           BRA    test_97
+assert_100:              BNE    $7 $0 assert_true_98
+                         EXCH   $8 $6
+cmp_top_108:             BNE    $8 $0 cmp_bot_109
+                         XORI   $9 1
+cmp_bot_109:             BNE    $8 $0 cmp_top_108
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_top_110:             BEQ    $11 $0 cmp_bot_111
+                         XORI   $12 1
+cmp_bot_111:             BEQ    $11 $0 cmp_top_110
+                         ANDX   $13 $9 $12
+f_top_112:               BEQ    $13 $0 f_bot_113
+                         XORI   $14 1
+f_bot_113:               BEQ    $13 $0 f_top_112
+                         XOR    $7 $14
+f_bot_113_i:             BEQ    $13 $0 f_top_112_i
+                         XORI   $14 1
+f_top_112_i:             BEQ    $13 $0 f_bot_113_i
+                         ANDX   $13 $9 $12
+cmp_bot_111_i:           BEQ    $11 $0 cmp_top_110_i
+                         XORI   $12 1
+cmp_top_110_i:           BEQ    $11 $0 cmp_bot_111_i
+                         ADD    $10 $3
+                         ADDI   $10 2
+                         EXCH   $11 $10
+                         ADDI   $10 -2
+                         SUB    $10 $3
+cmp_bot_109_i:           BNE    $8 $0 cmp_top_108_i
+                         XORI   $9 1
+cmp_top_108_i:           BNE    $8 $0 cmp_bot_109_i
+                         EXCH   $8 $6
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+                         XORI   $9 1
+                         ADD    $8 $9
+                         XORI   $9 1
+                         ADD    $7 $3
+                         ADDI   $7 3
+                         EXCH   $8 $7
+                         ADDI   $7 -3
+                         SUB    $7 $3
+l_prependCell_3_bot:     BRA    l_prependCell_3_top
+l_length_4_top:          BRA    l_length_4_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_length_4:              SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         EXCH   $7 $6
+                         ADD    $8 $3
+                         ADDI   $8 3
+                         EXCH   $9 $8
+                         ADDI   $8 -3
+                         SUB    $8 $3
+                         XOR    $7 $9
+                         ADD    $8 $3
+                         ADDI   $8 3
+                         EXCH   $9 $8
+                         ADDI   $8 -3
+                         SUB    $8 $3
+                         EXCH   $7 $6
+l_length_4_bot:          BRA    l_length_4_top
+l_main_0_top:            BRA    l_main_0_bot
+                         ADDI   $1 1
+                         EXCH   $2 $1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+l_main_0:                SWAPBR $2
+                         NEG    $2
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         EXCH   $2 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+obj_con_114:             ADDI   $8 4
+                         EXCH   $8 $1
+                         ADDI   $1 -1
+                         EXCH   $7 $1
+                         ADDI   $1 -1
+                         BRA    l_malloc
+                         ADDI   $1 1
+                         EXCH   $7 $1
+                         ADDI   $1 1
+                         EXCH   $8 $1
+obj_con_114_i:           ADDI   $8 -4
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADD    $6 $3
+                         ADDI   $6 2
+                         XORI   $8 5
+                         EXCH   $8 $7
+                         ADDI   $7 1
+                         XORI   $8 1
+                         EXCH   $8 $7
+obj_con_114_bot:         ADDI   $7 -1
+                         EXCH   $7 $6
+                         ADDI   $6 -2
+                         SUB    $6 $3
+                         ADD    $6 $3
+                         ADDI   $6 4
+                         EXCH   $7 $6
+                         ADDI   $6 -4
+                         SUB    $6 $3
+                         XORI   $8 10
+                         ADD    $7 $8
+                         XORI   $8 10
+                         ADD    $6 $3
+                         ADDI   $6 4
+                         EXCH   $7 $6
+                         ADDI   $6 -4
+                         SUB    $6 $3
+localBlock_133:          XOR    $6 $1
+                         XOR    $7 $0
+                         EXCH   $7 $1
+                         ADDI   $1 -1
+                         XORI   $7 1
+entry_115:               BEQ    $7 $0 assert_117
+                         EXCH   $8 $6
+cmp_top_119:             BNE    $8 $0 cmp_bot_120
+                         XORI   $9 1
+cmp_bot_120:             BNE    $8 $0 cmp_top_119
+f_top_121:               BEQ    $9 $0 f_bot_122
+                         XORI   $10 1
+f_bot_122:               BEQ    $9 $0 f_top_121
+                         XOR    $7 $10
+f_bot_122_i:             BEQ    $9 $0 f_top_121_i
+                         XORI   $10 1
+f_top_121_i:             BEQ    $9 $0 f_bot_122_i
+cmp_bot_120_i:           BNE    $8 $0 cmp_top_119_i
+                         XORI   $9 1
+cmp_top_119_i:           BNE    $8 $0 cmp_bot_120_i
+                         EXCH   $8 $6
+                         EXCH   $8 $6
+                         ADD    $9 $3
+                         ADDI   $9 4
+                         EXCH   $10 $9
+                         ADDI   $9 -4
+                         SUB    $9 $3
+cmp_top_129:             BNE    $8 $10 cmp_bot_130
+                         XORI   $11 1
+cmp_bot_130:             BNE    $8 $10 cmp_top_129
+f_top_131:               BEQ    $11 $0 f_bot_132
+                         XORI   $12 1
+f_bot_132:               BEQ    $11 $0 f_top_131
+                         XOR    $7 $12
+f_bot_132_i:             BEQ    $11 $0 f_top_131_i
+                         XORI   $12 1
+f_top_131_i:             BEQ    $11 $0 f_bot_132_i
+cmp_bot_130_i:           BNE    $8 $10 cmp_top_129_i
+                         XORI   $11 1
+cmp_top_129_i:           BNE    $8 $10 cmp_bot_130_i
+                         ADD    $9 $3
+                         ADDI   $9 4
+                         EXCH   $10 $9
+                         ADDI   $9 -4
+                         SUB    $9 $3
+                         EXCH   $8 $6
+test_116:                BNE    $7 $0 exit_118
+localBlock_128:          XOR    $8 $1
+                         XOR    $9 $0
+                         EXCH   $9 $1
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $8 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+obj_con_123:             ADDI   $10 4
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         EXCH   $9 $1
+                         ADDI   $1 -1
+                         BRA    l_malloc
+                         ADDI   $1 1
+                         EXCH   $9 $1
+                         ADDI   $1 1
+                         EXCH   $10 $1
+obj_con_123_i:           ADDI   $10 -4
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $8 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         XORI   $10 9
+                         EXCH   $10 $9
+                         ADDI   $9 1
+                         XORI   $10 1
+                         EXCH   $10 $9
+obj_con_123_bot:         ADDI   $9 -1
+                         EXCH   $9 $8
+                         EXCH   $9 $8
+                         XOR    $10 $9
+loadMetAdd_124:          EXCH   $11 $10
+                         ADDI   $11 0
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 0
+                         EXCH   $11 $10
+                         EXCH   $9 $8
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $8 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $10 $1
+                         ADDI   $1 -1
+                         ADDI   $13 -1117
+l_jmp_125:               SWAPBR $13
+                         NEG    $13
+                         ADDI   $13 1117
+                         ADDI   $1 1
+                         EXCH   $10 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $8 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         EXCH   $9 $8
+                         EXCH   $11 $10
+                         ADDI   $11 0
+                         EXCH   $12 $11
+                         XOR    $13 $12
+                         EXCH   $12 $11
+                         ADDI   $11 0
+loadMetAdd_124_i:        EXCH   $11 $10
+                         XOR    $10 $9
+                         EXCH   $9 $8
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+                         XOR    $11 $10
+loadMetAdd_126:          EXCH   $12 $11
+                         ADDI   $12 1
+                         EXCH   $13 $12
+                         XOR    $14 $13
+                         EXCH   $13 $12
+                         ADDI   $12 -1
+                         EXCH   $12 $11
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         EXCH   $6 $1
+                         ADDI   $1 -1
+                         EXCH   $8 $1
+                         ADDI   $1 -1
+                         EXCH   $11 $1
+                         ADDI   $1 -1
+                         ADDI   $14 -1165
+l_jmp_127:               SWAPBR $14
+                         NEG    $14
+                         ADDI   $14 1165
+                         ADDI   $1 1
+                         EXCH   $11 $1
+                         ADDI   $1 1
+                         EXCH   $8 $1
+                         ADDI   $1 1
+                         EXCH   $6 $1
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+                         EXCH   $12 $11
+                         ADDI   $12 1
+                         EXCH   $13 $12
+                         XOR    $14 $13
+                         EXCH   $13 $12
+                         ADDI   $12 -1
+loadMetAdd_126_i:        EXCH   $12 $11
+                         XOR    $11 $10
+                         ADD    $9 $3
+                         ADDI   $9 2
+                         EXCH   $10 $9
+                         ADDI   $9 -2
+                         SUB    $9 $3
+                         ADDI   $1 1
+                         EXCH   $9 $1
+                         XOR    $9 $0
+localBlock_128_i:        XOR    $8 $1
+                         EXCH   $8 $6
+                         XORI   $9 1
+                         ADD    $8 $9
+                         XORI   $9 1
+                         EXCH   $8 $6
+assert_117:              BRA    entry_115
+exit_118:                BRA    test_116
+                         XORI   $7 1
+                         ADD    $7 $3
+                         ADDI   $7 4
+                         EXCH   $8 $7
+                         ADDI   $7 -4
+                         SUB    $7 $3
+                         ADDI   $1 1
+                         EXCH   $9 $1
+                         XOR    $9 $8
+localBlock_133_i:        XOR    $6 $1
+                         ADD    $7 $3
+                         ADDI   $7 4
+                         EXCH   $8 $7
+                         ADDI   $7 -4
+                         SUB    $7 $3
+l_main_0_bot:            BRA    l_main_0_top
+start:                   BRA    top
+                         START 
+                         ADDI   $4 1279
+                         XOR    $5 $4
+                         ADDI   $5 10
+                         XOR    $7 $5
+                         ADDI   $4 10
+                         ADDI   $4 -1
+                         EXCH   $7 $4
+                         ADDI   $4 1
+                         ADDI   $4 -10
+                         XOR    $1 $5
+                         ADDI   $1 16384
+                         ADDI   $1 -8
+                         XOR    $3 $1
+                         XORI   $6 4
+                         EXCH   $6 $3
+                         ADDI   $1 -1
+                         EXCH   $3 $1
+                         ADDI   $1 -1
+                         BRA    l_main_0
+                         ADDI   $1 1
+                         EXCH   $3 $1
+                         ADDI   $3 1
+                         ADDI   $3 1
+                         EXCH   $6 $3
+                         XORI   $7 1
+                         EXCH   $6 $7
+                         XORI   $7 1
+                         ADDI   $3 -1
+                         ADDI   $3 -1
+                         ADDI   $3 1
+                         ADDI   $3 2
+                         EXCH   $6 $3
+                         XORI   $7 2
+                         EXCH   $6 $7
+                         XORI   $7 2
+                         ADDI   $3 -2
+                         ADDI   $3 -1
+                         ADDI   $3 1
+                         ADDI   $3 3
+                         EXCH   $6 $3
+                         XORI   $7 3
+                         EXCH   $6 $7
+                         XORI   $7 3
+                         ADDI   $3 -3
+                         ADDI   $3 -1
+                         ADDI   $1 1
+                         EXCH   $6 $3
+                         XORI   $6 4
+                         XOR    $3 $1
+                         ADDI   $1 8
+                         ADDI   $1 -16384
+                         XOR    $1 $5
+                         ADDI   $5 -10
+                         XOR    $5 $4
+                         ADDI   $4 -1279
+finish:                  FINISH

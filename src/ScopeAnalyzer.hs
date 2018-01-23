@@ -278,7 +278,6 @@ prefixVtable (m:ms) m' = if comp m m' then m':ms else m : prefixVtable ms m'
     where comp (_, n) (_, n') = n == n'
 
 -- | Scope Analyses a passed class
--- TODO: Fix offset for MAIN class
 saClass :: Offset -> [SIdentifier] -> ClassDeclaration -> ScopeAnalyzer [(TypeName, SMethodDeclaration)]
 saClass offset pids (GCDecl c _ fs ms) =
     do enterScope
