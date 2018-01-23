@@ -363,19 +363,16 @@ cgLoop e1 s1 s2 e2 =
                 [(Just l_test, BNE rt registerZero l_exit)] ++ s2' ++
                 [(Just l_assert, BRA l_entry), (Just l_exit, BRA l_test), (Nothing, XORI rt $ Immediate 1)]
 
--- | Code generation for object blocks FIXME: stack allocation order
+-- | Code generation for object blocks
 cgObjectBlock :: TypeName -> SIdentifier -> [SStatement] -> CodeGenerator [(Maybe Label, MInstruction)]
 cgObjectBlock tp n stmt =
     do rn <- pushRegister n
-       rv <- tempRegister
-       popTempRegister --rv
+       let push = [(Nothing, XOR rn registerSP), (Nothing, SUBI registerSP $ Immediate 1)]
+       malloc <- cgObjectConstruction tp (n, Nothing)
        stmt' <- concat <$> mapM cgStatement stmt
-       popRegister --rn
-       let create = [(Nothing, XOR rn registerSP),
-                     (Nothing, XORI rv $ AddressMacro $ "l_" ++ tp ++ "_vt"),
-                     (Nothing, EXCH rv registerSP),
-                     (Nothing, SUBI registerSP $ SizeMacro tp)]
-       return $ create ++ stmt' ++ invertInstructions create
+       free <- cgObjectDestruction tp (n, Nothing)
+       popRegister
+       return $ push ++ malloc ++ stmt' ++ free ++ invertInstructions push
 
 -- | Code generation for local blocks
 cgLocalBlock :: SIdentifier -> SExpression -> [SStatement] -> SExpression -> CodeGenerator [(Maybe Label, MInstruction)]
@@ -858,22 +855,24 @@ getFields tp =
 cgOutput :: TypeName -> CodeGenerator ([(Maybe Label, MInstruction)], [(Maybe Label, MInstruction)])
 cgOutput tp =
     do mfs <- getFields tp
-       co <- concat <$> mapM cgCopyOutput (zip [1..] $ reverse mfs)
+       co <- concat <$> mapM cgCopyOutput (zip [1..] mfs)
        return (map cgStatic mfs, co)
     where cgStatic (GDecl _ n) = (Just $ "l_r_" ++ n, DATA $ Immediate 0)
           cgCopyOutput(o, GDecl _ n) =
               do rt <- tempRegister
                  ra <- tempRegister
                  popTempRegister >> popTempRegister
-                 let copy = [ADDI registerSP $ Immediate o,
-                             EXCH rt registerSP,
+                 let copy = [ADDI registerThis ReferenceCounterIndex,
+                             ADDI registerThis $ Immediate o,
+                             EXCH rt registerThis,
                              XORI ra $ AddressMacro $ "l_r_" ++ n,
                              EXCH rt ra,
                              XORI ra $ AddressMacro $ "l_r_" ++ n,
-                             SUBI registerSP $ Immediate o]
+                             SUBI registerThis $ Immediate o,
+                             SUBI registerThis ReferenceCounterIndex]
                  return $ zip (repeat Nothing) copy
 
--- | Generates code for the program entry point FIXME: main object allocing
+-- | Generates code for the program entry point
 cgProgram :: SProgram -> CodeGenerator PISA.MProgram
 cgProgram p =
     do vt <- cgVirtualTables
@@ -898,24 +897,26 @@ cgProgram p =
                  (Nothing, EXCH rb registerFLPs),             -- Store address of first block in last element of free lists
                  (Nothing, ADDI registerFLPs $ Immediate 1),  -- Index to end of free lists
                  (Nothing, SUBI registerFLPs FreeListsSize),  -- Index to beginning of free lists
-                --  (Nothing, XOR registerSP registerHP),       -- Init stack pointer 1/2
+                 (Nothing, XOR registerSP registerHP),        -- Init stack pointer 1/2
                  (Nothing, ADDI registerSP StackOffset),      -- Init stack pointer 2/2
+                 (Nothing, SUBI registerSP $ SizeMacro mtp),  -- Allocate space for main on stack
                  (Nothing, XOR registerThis registerSP),      -- Store address of main object
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Store address of vtable in rv
-                 (Nothing, EXCH rv registerSP),               -- Add address of vtable to stack
-                 (Nothing, SUBI registerSP $ SizeMacro mtp),  -- Allocate space for object on stack
+                 (Nothing, EXCH rv registerThis),             -- Add address of vtable to stack
+                 (Nothing, SUBI registerSP $ Immediate 1),    -- Add address of vtable to stack
                  (Nothing, EXCH registerThis registerSP),     -- Push 'this' to stack
                  (Nothing, SUBI registerSP $ Immediate 1),    -- Push 'this' to stack
                  (Nothing, BRA l_main),                       -- Execute main
                  (Nothing, ADDI registerSP $ Immediate 1),    -- Pop 'this'
-                 (Nothing, EXCH registerThis registerSP)]     -- Pop 'this'
+                 (Nothing, EXCH registerThis registerSP)]     -- Pop 'this'   
                   ++ co ++
-                [(Nothing, ADDI registerSP $ SizeMacro mtp),  -- Deallocate space for program
-                 (Nothing, EXCH rv registerSP),               -- Pop vtable address
+                [(Nothing, ADDI registerSP $ Immediate 1),    -- Pop vtable address  
+                 (Nothing, EXCH rv registerThis),             -- Pop vtable address
                  (Nothing, XORI rv $ AddressMacro mvt),       -- Clear rv
                  (Nothing, XOR registerThis registerSP),      -- Clear 'this'
+                 (Nothing, ADDI registerSP $ SizeMacro mtp),  -- Deallocate space for main
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
-                --  (Nothing, XOR registerSP registerHP),        -- Clear stack pointer
+                 (Nothing, XOR registerSP registerHP),        -- Clear stack pointer
                  (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
                  (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
                  (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer
