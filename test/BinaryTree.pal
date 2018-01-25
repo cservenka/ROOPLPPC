@@ -2008,7 +2008,7 @@ start:                   BRA    top
                          ADDI   $4 1
                          ADDI   $4 -10
                          XOR    $1 $5
-                         ADDI   $1 16384
+                         ADDI   $1 2048
                          ADDI   $1 -8
                          XOR    $3 $1
                          XORI   $6 4
@@ -2048,7 +2048,7 @@ start:                   BRA    top
                          XORI   $6 4
                          XOR    $3 $1
                          ADDI   $1 8
-                         ADDI   $1 -16384
+                         ADDI   $1 -2048
                          XOR    $1 $5
                          ADDI   $5 -10
                          XOR    $5 $4

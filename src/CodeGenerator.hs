@@ -917,9 +917,9 @@ cgProgram p =
                  (Nothing, ADDI registerSP $ SizeMacro mtp),  -- Deallocate space for main
                  (Nothing, SUBI registerSP StackOffset),      -- Clear stack pointer
                  (Nothing, XOR registerSP registerHP),        -- Clear stack pointer
-                 (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer
-                 (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer
-                 (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer
+                 (Nothing, SUBI registerHP FreeListsSize),    -- Reset Heap pointer (For pretty output)
+                 (Nothing, XOR registerHP registerFLPs),      -- Reset Heap pointer (For pretty output)
+                 (Nothing, SUBI registerFLPs ProgramSize),    -- Reset Free lists pointer (For pretty output)
                  (Just "finish", FINISH)]
        return $ PISA.GProg $ [(Just "top", BRA "start")] ++ out ++ vt ++ malloc ++ malloc1 ++ ms ++ mn
 
